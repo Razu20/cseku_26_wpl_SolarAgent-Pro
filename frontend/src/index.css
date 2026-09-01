@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .input {
+    @apply w-full px-3 py-2 rounded-md text-sm border border-slate-300 dark:border-panelBorder
+           bg-white dark:bg-inputDark text-ink dark:text-slate-100 outline-none
+           transition-colors focus:border-solar;
+  }
+}
+
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+}
