@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+!.env.example
+.DS_Store
+dist
+coverage
+apps/backend/drizzle
+apps/backend/.env
+apps/web/dist

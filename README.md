@@ -32,14 +32,14 @@ SolarAgent Pro aims to make preliminary solar-system planning accessible to home
 
 Instead of requiring a user to understand:
 
-* photovoltaic sizing,
-* peak sun hours,
-* battery capacity,
-* depth of discharge,
-* inverter sizing,
-* component selection,
-* installation requirements,
-* cost estimation,
+- photovoltaic sizing,
+- peak sun hours,
+- battery capacity,
+- depth of discharge,
+- inverter sizing,
+- component selection,
+- installation requirements,
+- cost estimation,
 
 the system provides a guided workflow through which the user supplies understandable information and receives an engineering-oriented recommendation.
 
@@ -57,27 +57,27 @@ SolarAgent Pro follows a strict separation between:
 
 The AI agent handles:
 
-* natural-language interaction,
-* user requirement interpretation,
-* clarification,
-* tool selection,
-* result explanation,
-* conversational recommendations,
-* report narration.
+- natural-language interaction,
+- user requirement interpretation,
+- clarification,
+- tool selection,
+- result explanation,
+- conversational recommendations,
+- report narration.
 
 ### Deterministic engineering
 
 The calculation engines handle:
 
-* site suitability,
-* energy demand,
-* peak load,
-* PV sizing,
-* battery sizing,
-* component selection,
-* cost estimation,
-* payback estimation,
-* installation roadmap generation.
+- site suitability,
+- energy demand,
+- peak load,
+- PV sizing,
+- battery sizing,
+- component selection,
+- cost estimation,
+- payback estimation,
+- installation roadmap generation.
 
 The uploaded specification explicitly defines this separation and requires numeric outputs to trace back to inspectable engineering calculations.
 
@@ -95,7 +95,7 @@ Ensure that energy, system sizing, component, cost, and payback results originat
 
 ## O3 - Rapid Deployment
 
-Provide a full-stack reference implementation using FastAPI and React that can be run locally with a relatively small setup process.
+Provide a full-stack reference implementation using Express, TypeScript, React, and Vite that can be run locally with a relatively small setup process.
 
 ## O4 - Rigorous Documentation
 
@@ -117,37 +117,37 @@ Users interested in determining whether solar power is appropriate for their res
 
 Typical requirements include:
 
-* household appliance loads,
-* roof characteristics,
-* available roof area,
-* desired backup duration,
-* budget,
-* grid availability.
+- household appliance loads,
+- roof characteristics,
+- available roof area,
+- desired backup duration,
+- budget,
+- grid availability.
 
 ## 5.2 Small Shop Owners
 
 Users operating small commercial spaces that require:
 
-* daytime solar generation,
-* backup power,
-* refrigeration,
-* lighting,
-* fans,
-* computers,
-* networking equipment,
-* other small commercial loads.
+- daytime solar generation,
+- backup power,
+- refrigeration,
+- lighting,
+- fans,
+- computers,
+- networking equipment,
+- other small commercial loads.
 
 ## 5.3 Academic Evaluators
 
 The system also serves as a demonstrable academic project showing:
 
-* AI-agent integration,
-* deterministic engineering computation,
-* full-stack development,
-* REST API design,
-* report generation,
-* software architecture,
-* AI-assisted development methodology.
+- AI-agent integration,
+- deterministic engineering computation,
+- full-stack development,
+- REST API design,
+- report generation,
+- software architecture,
+- AI-assisted development methodology.
 
 ---
 
@@ -222,43 +222,43 @@ SolarAgent Pro is designed to collect information from the user through structur
 
 Potential inputs include:
 
-* country,
-* city/region,
-* address,
-* optional geographic coordinates.
+- country,
+- city/region,
+- address,
+- optional geographic coordinates.
 
 ## 8.2 Building Information
 
 Potential inputs include:
 
-* building type,
-* roof type,
-* available roof area,
-* roof orientation,
-* roof tilt,
-* shading conditions,
-* nearby trees,
-* nearby buildings.
+- building type,
+- roof type,
+- available roof area,
+- roof orientation,
+- roof tilt,
+- shading conditions,
+- nearby trees,
+- nearby buildings.
 
 ## 8.3 Electrical Load Information
 
 Users can provide appliance inventories such as:
 
-* appliance name,
-* quantity,
-* rated power,
-* operating hours,
-* expected usage pattern.
+- appliance name,
+- quantity,
+- rated power,
+- operating hours,
+- expected usage pattern.
 
 ## 8.4 Solar Requirement
 
 The system can use requirements such as:
 
-* desired backup,
-* battery autonomy target,
-* grid availability,
-* solar preference,
-* budget constraints.
+- desired backup,
+- battery autonomy target,
+- grid availability,
+- solar preference,
+- budget constraints.
 
 ## 8.5 Optional Roof Photograph
 
@@ -271,18 +271,18 @@ The frontend can accept a roof photograph as additional visual context for the c
 File:
 
 ```text
-backend/app/engines/site_analysis.py
+apps/backend/src/services/engineering.ts
 ```
 
 The Site Analysis Engine evaluates the suitability of the proposed location for solar deployment.
 
 The current project specification states that it estimates:
 
-* Peak Sun Hours (PSH),
-* temperature,
-* tariffs,
-* overall suitability score,
-* contributing suitability factors.
+- Peak Sun Hours (PSH),
+- temperature,
+- tariffs,
+- overall suitability score,
+- contributing suitability factors.
 
 The suitability score is represented on a 0–100 scale.
 
@@ -312,18 +312,18 @@ The exact production values and formulas should be taken from the implementation
 File:
 
 ```text
-backend/app/engines/energy_engine.py
+apps/backend/src/services/engineering.ts
 ```
 
 The Energy Engine converts an appliance inventory into an estimated electrical demand profile.
 
 Its responsibilities include:
 
-* aggregating appliance consumption,
-* estimating daily energy demand,
-* calculating peak load,
-* applying diversity factors,
-* supporting subsequent PV and battery sizing.
+- aggregating appliance consumption,
+- estimating daily energy demand,
+- calculating peak load,
+- applying diversity factors,
+- supporting subsequent PV and battery sizing.
 
 The SRS identifies this functionality as FR-2.
 
@@ -371,9 +371,9 @@ SolarAgent Pro determines PV array capacity using site solar availability and th
 
 The project specification explicitly identifies:
 
-* PSH,
-* PV array capacity in kWp,
-* energy demand,
+- PSH,
+- PV array capacity in kWp,
+- energy demand,
 
 as core inputs/outputs of the sizing process.
 
@@ -392,9 +392,9 @@ The exact derating, efficiency, loss, and sizing assumptions must remain aligned
 
 Battery sizing is performed using:
 
-* required storage,
-* Depth of Discharge (DoD),
-* autonomy target.
+- required storage,
+- Depth of Discharge (DoD),
+- autonomy target.
 
 The project specification explicitly identifies battery sizing as part of FR-3.
 
@@ -416,18 +416,18 @@ Additional conversion losses and design margins should be applied according to t
 File:
 
 ```text
-backend/app/engines/component_engine.py
+apps/backend/src/services/engineering.ts
 ```
 
 The Component Engine generates a Bill of Materials (BOM).
 
 The documented component categories include:
 
-* solar panels,
-* inverter,
-* LiFePO4 battery bank,
-* mounting system,
-* Balance of System (BOS).
+- solar panels,
+- inverter,
+- LiFePO4 battery bank,
+- mounting system,
+- Balance of System (BOS).
 
 The engine is responsible for converting the calculated system requirement into a practical component configuration.
 
@@ -465,16 +465,16 @@ BOS
 File:
 
 ```text
-backend/app/engines/cost_engine.py
+apps/backend/src/services/engineering.ts
 ```
 
 The Cost Engine estimates:
 
-* total installed cost,
-* cost range,
-* annual energy yield,
-* annual savings,
-* simple payback horizon.
+- total installed cost,
+- cost range,
+- annual energy yield,
+- annual savings,
+- simple payback horizon.
 
 These functions constitute FR-5 in the original project specification.
 
@@ -497,17 +497,17 @@ The actual implementation should be treated as the authoritative source for all 
 File:
 
 ```text
-backend/app/engines/roadmap_engine.py
+apps/backend/src/services/engineering.ts
 ```
 
 The Roadmap Engine transforms the design into an implementation-oriented plan.
 
 Its documented responsibilities include:
 
-* phased installation steps,
-* safety warnings,
-* common pitfalls,
-* maintenance schedules.
+- phased installation steps,
+- safety warnings,
+- common pitfalls,
+- maintenance schedules.
 
 This corresponds to FR-6.
 
@@ -536,8 +536,8 @@ Phase 7 — Monitoring & Maintenance
 Files:
 
 ```text
-backend/app/agent.py
-backend/app/system_prompt.py
+apps/backend/src/routes/recommendations.ts
+apps/backend/src/services/engineering.ts
 ```
 
 The conversational agent uses the Anthropic Claude Messages API.
@@ -601,7 +601,7 @@ This architecture is one of the project's most important engineering principles.
 File:
 
 ```text
-backend/app/report_generator.py
+Report generation remains a planned extension of the current API baseline.
 ```
 
 The system supports downloadable reports.
@@ -640,50 +640,53 @@ SolarAgent Pro Report
 
 # 20. Frontend Architecture
 
-The frontend is implemented using:
+The current frontend is implemented using:
 
-* React,
-* Vite,
-* Tailwind CSS.
+- React,
+- Vite,
+- React Router,
+- TypeScript.
 
 The documented frontend contains components, context/state management, API communication, and the main application entry points.
 
 ## Frontend Responsibilities
 
 ```text
-React Application
+Vite + React Application
 │
-├── Input Forms
-├── Site Information
-├── Load Inventory
-├── Solar Requirements
-├── Results Dashboard
-├── AI Chat Panel
-├── Report Download
-├── Session Context
-└── Theme Provider
+├── Landing page
+├── Dashboard
+├── Leads
+├── Projects
+├── Engineering
+├── Inventory
+├── Tickets
+├── Recommendations
+├── Monitoring
+└── Audit explorer
 ```
 
 ---
 
 # 21. Backend Architecture
 
-The backend uses:
+The current backend uses:
 
 ```text
-FastAPI + Python
+Express + TypeScript
 ```
 
 Its responsibilities include:
 
-* REST API endpoints,
-* request validation,
-* AI-agent orchestration,
-* deterministic engine execution,
-* session handling,
-* report generation.
+- REST API endpoints,
+- request validation,
+- request validation with Zod,
+- deterministic engineering execution,
+- domain CRUD APIs,
+- RBAC and audit primitives,
+- Drizzle/PostgreSQL schema and migrations.
 
-The current design uses an in-memory session store.
+The current CRUD store is in memory for local development. The Drizzle schema and generated migration provide the persistence boundary for PostgreSQL/PostGIS deployment.
 
 ---
 
@@ -707,7 +710,7 @@ The current design uses an in-memory session store.
                                 | REST API
                                 v
 +-------------------------------------------------------------+
-|                    FASTAPI BACKEND                          |
+|                    EXPRESS BACKEND                          |
 |                                                             |
 | API Routes | Session Store | Agent | Report Generator       |
 +-------------------------------+-----------------------------+
@@ -734,7 +737,7 @@ The current design uses an in-memory session store.
 +-------------------------------------------------------------+
 ```
 
-The original architecture similarly separates the React frontend, FastAPI backend, deterministic engines, and external conversational layer.
+The current architecture separates the React frontend, Express backend, deterministic services, and external conversational layer.
 
 ---
 
@@ -743,34 +746,20 @@ The original architecture similarly separates the React frontend, FastAPI backen
 ```text
 solaragent-pro/
 │
-├── backend/
-│   ├── app/
-│   │   ├── engines/
-│   │   │   ├── site_analysis.py
-│   │   │   ├── energy_engine.py
-│   │   │   ├── component_engine.py
-│   │   │   ├── cost_engine.py
-│   │   │   └── roadmap_engine.py
-│   │   │
-│   │   ├── agent.py
-│   │   ├── system_prompt.py
-│   │   ├── report_generator.py
-│   │   └── main.py
-│   │
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── api.js
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   │
-│   ├── package.json
-│   ├── tailwind.config.js
-│   └── vite.config.js
+├── apps/
+│   ├── backend/
+│   │   ├── src/routes/
+│   │   ├── src/services/
+│   │   ├── src/db/schema.ts
+│   │   ├── src/store.ts
+│   │   ├── src/index.ts
+│   │   ├── drizzle.config.ts
+│   │   └── drizzle/
+│   └── web/
+│       └── src/
+│           ├── pages/
+│           ├── main.tsx
+│           └── styles.css
 │
 ├── docs/
 │   ├── SolarAgent_Pro_SRS_Week1.pdf
@@ -793,23 +782,47 @@ This structure follows the repository organization supplied in the original docu
 
 # 24. API Layer
 
-The FastAPI backend exposes REST endpoints for communication between the frontend and backend.
+The Express backend exposes REST endpoints for communication between the frontend and backend.
 
-The backend also provides interactive API documentation through Swagger.
+## Development endpoints
 
-Development API:
+Backend base URL:
 
 ```text
-http://localhost:8000/docs
+http://localhost:4000
 ```
 
 Health check:
 
 ```text
-http://localhost:8000/
+GET /health
 ```
 
-The exact endpoint list should remain synchronized with `backend/app/main.py`.
+Core routes:
+
+```text
+POST/GET /api/v1/leads
+POST/GET /api/v1/sites
+POST/GET /api/v1/recommendations
+POST/GET /api/v1/engineering
+POST/GET /api/v1/quotes
+POST/GET /api/v1/projects
+GET       /api/v1/sites/:id/monitoring
+POST/GET /api/v1/tickets
+GET       /api/v1/audit
+```
+
+Operational CRUD routes:
+
+```text
+/api/v1/utilities
+/api/v1/inventory
+/api/v1/work-orders
+/api/v1/nem-applications
+/api/v1/devices
+```
+
+The operational routes support `GET`, `POST`, `PATCH`, and `DELETE` where applicable. Request bodies are validated with Zod.
 
 ---
 
@@ -818,11 +831,11 @@ The exact endpoint list should remain synchronized with `backend/app/main.py`.
 The conceptual communication flow is:
 
 ```text
-React
+React + Vite
   |
   | HTTP Request
   v
-FastAPI
+Express
   |
   +---- Validate Request
   |
@@ -845,7 +858,7 @@ React Dashboard
 
 # 26. Session Management
 
-The documented implementation currently uses an:
+The current local implementation uses an:
 
 ```text
 In-Memory SessionStore
@@ -861,8 +874,8 @@ For a production deployment, persistent storage can later be introduced, but suc
 
 The frontend supports:
 
-* light theme,
-* dark theme.
+- light theme,
+- dark theme.
 
 Theme management is handled through the frontend context/provider architecture.
 
@@ -947,13 +960,16 @@ This traceability is a central quality requirement of the project.
 
 # 30. Configuration
 
-Create the environment configuration from the provided template:
+Create a `.env` file when using PostgreSQL or other external services:
 
 ```bash
-cp .env.example .env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/solaragent
+PORT=4000
 ```
 
-The documented required external credential is:
+The backend reads `DATABASE_URL` for Drizzle migrations. The default value targets a local PostgreSQL instance. A live PostgreSQL/PostGIS service is required to apply migrations.
+
+If AI provider integration is enabled later, keep its credential in the backend environment only:
 
 ```text
 ANTHROPIC_API_KEY
@@ -967,68 +983,34 @@ The API key should be stored only in the backend environment and must never be e
 
 ## Requirements
 
-The current documentation specifies:
+The current backend requires:
 
 ```text
-Python 3.10+
+Node.js 20+
+npm
 ```
-
-and:
-
-```text
-Anthropic Claude API Key
-```
-
-as backend prerequisites.
 
 ## Setup
 
 ```bash
-cd backend
-
-python -m venv venv
+npm install
+npm run dev --workspace apps/backend
 ```
 
-### Linux/macOS
+The backend is available at:
 
 ```bash
-source venv/bin/activate
-```
-
-### Windows
-
-```bash
-venv\Scripts\activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Configure environment variables:
-
-```bash
-cp .env.example .env
-```
-
-Add the API key to `.env`.
-
-Start the development server:
-
-```bash
-uvicorn app.main:app --reload --port 8000
+http://localhost:4000
 ```
 
 ---
 
 # 32. Frontend Installation
 
-The current documentation specifies:
+The current frontend requires:
 
 ```text
-Node.js 18+
+Node.js 20+
 npm
 ```
 
@@ -1037,9 +1019,8 @@ as frontend prerequisites.
 Run:
 
 ```bash
-cd frontend
 npm install
-npm run dev
+npm run dev --workspace apps/web
 ```
 
 The development frontend is available at:
@@ -1063,17 +1044,20 @@ http://localhost:5173
         v
 
 Backend
-http://localhost:8000
+http://localhost:4000
 
-        |
-        +---- Swagger
-        |     /docs
-        |
-        +---- Health
-              /
+    |
+    +---- Health
+      /health
 ```
 
-The documented local development ports are 5173 for Vite and 8000 for FastAPI.
+The local development ports are 5173 for Vite and 4000 for Express.
+
+To start both applications from the workspace root:
+
+```bash
+npm run dev
+```
 
 ---
 
@@ -1216,8 +1200,8 @@ Verify:
 
 ```text
 Frontend
-   ↓
-FastAPI
+  ↓
+Express API
    ↓
 Agent
    ↓
@@ -1230,11 +1214,11 @@ Response
 
 Verify that:
 
-* the agent calls the appropriate tools,
-* missing information is requested,
-* numeric values originate from tools,
-* tool failures are handled,
-* unsupported assumptions are not presented as facts.
+- the agent calls the appropriate tools,
+- missing information is requested,
+- numeric values originate from tools,
+- tool failures are handled,
+- unsupported assumptions are not presented as facts.
 
 ---
 
@@ -1321,21 +1305,21 @@ All client-provided values should be validated on the backend.
 
 Roof-image uploads should be:
 
-* type validated,
-* size limited,
-* safely processed,
-* prevented from becoming executable content.
+- type validated,
+- size limited,
+- safely processed,
+- prevented from becoming executable content.
 
 ## API Security
 
 Production deployment should introduce appropriate:
 
-* authentication,
-* authorization,
-* rate limiting,
-* CORS restrictions,
-* HTTPS,
-* secret management.
+- authentication,
+- authorization,
+- rate limiting,
+- CORS restrictions,
+- HTTPS,
+- secret management.
 
 These production controls are recommended architectural hardening measures and are not represented as already completed functionality in the supplied Week 1 document.
 
@@ -1349,15 +1333,15 @@ Its outputs should not automatically be interpreted as a final construction-read
 
 Final deployment should consider professional verification of:
 
-* structural roof capacity,
-* electrical protection,
-* cable sizing,
-* earthing,
-* local electrical regulations,
-* utility requirements,
-* installation conditions,
-* equipment availability,
-* actual site measurements.
+- structural roof capacity,
+- electrical protection,
+- cable sizing,
+- earthing,
+- local electrical regulations,
+- utility requirements,
+- installation conditions,
+- equipment availability,
+- actual site measurements.
 
 The system should therefore distinguish between:
 
@@ -1371,12 +1355,11 @@ and:
 Professional final engineering approval
 ```
 
-
 # 41. Current Development Status
 
 The supplied project roadmap defines the following status:
 
-```text
+````text
 Week 1 — Initiation & SRS
         DELIVERED
 
@@ -1422,7 +1405,7 @@ Weeks 5–6
 Development Sprint 2
        ↓
 Final Hardening & Packaging
- 
+
 
 # 43. Git Workflow
 
@@ -1430,7 +1413,7 @@ The project follows:
 
 ```text
 GitHub Flow
-```
+````
 
 with:
 
@@ -1464,6 +1447,90 @@ Example:
 fix/tariff-rounding
 ```
 
+---
+
+# 44. Current Implementation Reference
+
+The repository currently contains a working TypeScript full-stack baseline. The implementation is organized as an npm workspace:
+
+```text
+apps/backend   Express API, Zod validation, engineering services, CRUD store, Drizzle schema
+apps/web       Vite + React application with routed operational pages
+docs           Implementation traceability and project documentation
+```
+
+## Frontend routes
+
+The Vite application currently exposes:
+
+```text
+/                  Landing page
+/dashboard         Operations dashboard
+/leads             Lead pipeline
+/projects          Project list
+/engineering       Engineering metrics
+/inventory         Inventory overview
+/tickets           Service tickets
+/recommendations  Recommendation workbench
+/monitoring        Fleet monitoring
+/audit             Audit explorer
+```
+
+## Backend CRUD domains
+
+The backend store and API route layer cover:
+
+```text
+Leads, sites, recommendations, engineering results
+Projects, tickets, contacts, opportunities
+Products, quotes, surveys
+Utilities, inventory items, work orders
+NEM applications, monitoring devices
+```
+
+The survey, product, quote, utility, inventory, work-order, NEM, and device APIs are available under `/api/v1` and support validated create, list, retrieve, update, and delete operations.
+
+## Workspace commands
+
+Run these commands from the repository root:
+
+```bash
+npm install
+npm run dev        # start backend and frontend together
+npm test           # run Vitest
+npm run typecheck  # check backend and frontend TypeScript
+npm run lint       # run ESLint
+npm run build      # build both applications
+npm run generate   # generate Drizzle SQL migration
+npm run migrate    # apply migration to DATABASE_URL
+```
+
+The generated migrations are located at:
+
+```text
+apps/backend/drizzle/
+```
+
+The migration can be generated without a database. Applying it requires a reachable PostgreSQL/PostGIS instance configured through `DATABASE_URL`. Admin utility/product CRUD and customer lead CRUD now use PostgreSQL through Drizzle; some legacy domains still use the in-memory store.
+
+For a fresh local database:
+
+```bash
+copy .env.example .env
+npm run migrate
+npm run seed
+```
+
+The seed command is idempotent and creates sample leads, a utility, and catalog products for the admin and customer workspaces.
+
+## Admin and customer workspaces
+
+The admin workspace is available at `/admin` and provides database-backed utility and product management. The customer portal is available at `/customer` and provides project progress, package details, and a database-backed site-assessment request form.
+
+## Verified baseline
+
+The current baseline has passed the automated test suite, backend and frontend TypeScript checks, ESLint, and Drizzle migration generation. Live database execution, PostGIS-specific geometry operations, production authentication, and deployment configuration remain environment-dependent work.
+
 Documentation:
 
 ```text
@@ -1488,13 +1555,14 @@ docs:
 refactor:
 test:
 chore:
-```
+
+````
 
 Examples:
 
 ```bash
 feat: add battery sizing engine
-```
+````
 
 ```bash
 fix: correct inverter capacity calculation
@@ -1504,7 +1572,7 @@ fix: correct inverter capacity calculation
 docs: update architecture documentation
 ```
 
-```bash
+````bash
 test: add energy engine test cases
 
 The supplied contribution guidelines define these commit categories.
@@ -1568,9 +1636,9 @@ These should be updated alongside the actual implementation rather than document
 The current architecture provides a strong reference implementation. A production-oriented version can evolve toward:
 
 Current
-FastAPI
+Express + TypeScript
 +
-React
+Vite + React
 +
 In-memory sessions
 +
@@ -1581,9 +1649,9 @@ Deterministic engines
                 ↓
 
 Production
-FastAPI
+Express + TypeScript
 +
-React
+Vite + React
 +
 Persistent database
 +
@@ -1784,7 +1852,7 @@ Receives installation roadmap
 Interacts with AI agent
  ↓
 Downloads report
-```
+````
 
 while maintaining the fundamental requirement that numeric engineering outputs are generated by deterministic engines.
 
@@ -1798,15 +1866,13 @@ while maintaining the fundamental requirement that numeric engineering outputs a
 cd backend
 python -m venv venv
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+npm run dev --workspace apps/backend
 ```
 
 ## Frontend
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm run dev --workspace apps/web
 ```
 
 ## URLs
@@ -1816,10 +1882,10 @@ Frontend:
 http://localhost:5173
 
 Backend:
-http://localhost:8000
+http://localhost:4000
 
-API Documentation:
-http://localhost:8000/docs
+Health check:
+http://localhost:4000/health
 ```
 
 ---
@@ -1838,7 +1904,7 @@ http://localhost:8000/docs
           +-------------------+-------------------+
                               |
                               v
-                       FastAPI Backend
+                       Express Backend
                               |
           +-------------------+-------------------+
           |                   |                   |
