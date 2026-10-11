@@ -1,4 +1,5 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '');
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const API_BASE = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1')).replace(/\/+$/, '');
 
 type ApiOptions = {
   method?: string;

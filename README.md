@@ -1990,3 +1990,21 @@ Agentic Software Development
 ```
 
 The current Week 1 foundation establishes the requirements, architecture, repository organization, calculation-engine structure, AI-agent layer, and development methodology. Subsequent development should implement and validate the planned functionality while keeping the engineering calculations auditable and the AI layer constrained to validated tool outputs.
+
+## Vercel deployment
+
+This repository includes a Vercel configuration for the Vite frontend and Express API:
+
+1. Import the repository into Vercel with the repository root as the project root.
+2. Keep the build command as `npm run build --workspace @solaragent/web`.
+3. Keep the output directory as `apps/web/dist`.
+4. Add these environment variables in the Vercel project settings:
+   - `DATABASE_URL`
+   - `JWT_SECRET`
+   - `SSLCOMMERZ_STORE_ID`
+   - `SSLCOMMERZ_STORE_PASSWORD`
+   - `SSLCOMMERZ_IS_SANDBOX`
+   - `BACKEND_URL` and `FRONTEND_URL` using the deployed HTTPS URL
+5. Leave `VITE_API_URL` empty for a single-project deployment. The frontend then calls the same deployment through `/api/v1`.
+
+The Express API is exposed through the serverless catch-all function in `api/[...path].ts`. Do not commit `.env`; use Vercel environment variables for production secrets.

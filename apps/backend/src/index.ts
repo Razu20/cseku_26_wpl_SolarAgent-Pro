@@ -23,7 +23,7 @@ import { supplierRoutes } from './routes/suppliers.js';
 import { technicianRoutes } from './routes/technicians.js';
 import { notificationRoutes } from './routes/notifications.js';
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT || 4000);
 
 app.use(cors());
@@ -77,14 +77,18 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: 'internal_server_error' });
 });
 
-const server = app.listen(port, () => {
-  console.log(`SolarAgent Pro backend listening on http://localhost:${port}`);
-});
+if (process.env.VERCEL !== '1') {
+  const server = app.listen(port, () => {
+    console.log(`SolarAgent Pro backend listening on http://localhost:${port}`);
+  });
 
-function shutdown(signal: string) {
-  console.log(`${signal} received; shutting down`);
-  server.close(() => process.exit(0));
+  function shutdown(signal: string) {
+    console.log(`${signal} received; shutting down`);
+    server.close(() => process.exit(0));
+  }
+
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-process.once('SIGINT', () => shutdown('SIGINT'));
-process.once('SIGTERM', () => shutdown('SIGTERM'));
+export default app;
