@@ -53,6 +53,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'solaragent-backend', api: '/api/v1', health: '/api/health' });
+});
+
 app.get('/health', async (_req, res) => {
   try {
     await db.execute(sql`select 1`);
