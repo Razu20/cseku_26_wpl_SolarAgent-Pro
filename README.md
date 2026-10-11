@@ -1997,7 +1997,15 @@ Vercel should host the Vite frontend. Host the Express backend as a long-running
 
 ### Backend host
 
-Create a Node service from the repository root with:
+For a separate Vercel backend project, set **Root Directory** to `apps/backend` and use:
+
+```text
+Build command: npm run vercel-build
+```
+
+The backend is exposed at `https://your-backend.vercel.app/api/v1/...` and its health endpoint is `https://your-backend.vercel.app/api/health`.
+
+For Render, Railway, Fly.io, or another long-running Node host, use the repository root and:
 
 ```text
 Build command: npm install && npm run build --workspace apps/backend
@@ -2018,7 +2026,7 @@ SSLCOMMERZ_STORE_PASSWORD=<optional>
 SSLCOMMERZ_IS_SANDBOX=true
 ```
 
-Verify it at `https://your-backend.example.com/health`. It must return `"database":"connected"`.
+Verify it at `https://your-backend.example.com/api/health`. It must return `"database":"connected"`.
 
 ### Vercel frontend
 
@@ -2028,7 +2036,7 @@ Verify it at `https://your-backend.example.com/health`. It must return `"databas
 4. Set the Vercel environment variable below, then redeploy:
 
 ```text
-VITE_API_URL=https://your-backend.example.com
+VITE_API_URL=https://your-backend.vercel.app
 ```
 
 The frontend requests `https://your-backend.example.com/api/v1/...` automatically. Do not set this to `localhost`, and do not add `/api/v1` twice.
