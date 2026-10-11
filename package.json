@@ -17,8 +17,8 @@
     "typecheck": "tsc -p apps/backend/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
     "test": "vitest run",
     "build": "npm run build --workspace apps/backend && npm run build --workspace apps/web",
-    "vercel-build": "npm run build --workspace @solaragent/web",
-    "db:setup": "npm run migrate && npm run migrate:shop && npm run seed && npm run seed:marketplace",
+    "vercel-build": "npm run build && npm run db:setup",
+    "db:setup": "npm run migrate && npm run migrate:shop && npm run seed",
     "dev": "concurrently \"npm run dev --workspace apps/backend\" \"npm run dev --workspace apps/web\""
   },
   "devDependencies": {
