@@ -10,7 +10,14 @@ export const env = {
   PUBLIC_API_URL: process.env.PUBLIC_API_URL || 'http://localhost:4000',
   CORS_ORIGINS: (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173')
     .split(',')
-    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .map((origin) => {
+      const trimmed = origin.trim().replace(/\/+$/, '');
+      try {
+        return trimmed ? new URL(trimmed).origin : '';
+      } catch {
+        return trimmed;
+      }
+    })
     .filter(Boolean),
   DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/solaragent',
 };

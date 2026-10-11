@@ -2033,13 +2033,22 @@ Verify it at `https://your-backend.example.com/api/health`. It must return `"dat
 1. Import the repository into Vercel with **Root Directory** set to `.`.
 2. Use `npm run vercel-build` as the build command.
 3. Use `apps/web/dist` as the output directory.
-4. Set the Vercel environment variable below, then redeploy:
+4. Set the Vercel environment variable below in the **Production** environment, then redeploy. A local `.env` file is not used by an already-created Vercel deployment:
 
 ```text
 VITE_API_URL=https://your-backend.vercel.app
 ```
 
-The frontend requests `https://your-backend.example.com/api/v1/...` automatically. Do not set this to `localhost`, and do not add `/api/v1` twice.
+The frontend requests `https://your-backend.vercel.app/api/v1/...` automatically. Do not set this to `localhost`, and do not add `/api/v1` twice.
+
+In the separate backend Vercel project, set `FRONTEND_URL` and `CORS_ORIGINS` to the exact frontend deployment origin, without a trailing slash:
+
+```text
+FRONTEND_URL=https://your-frontend.vercel.app
+CORS_ORIGINS=https://your-frontend.vercel.app
+```
+
+Changing `VITE_API_URL` requires a new frontend deployment because Vite embeds `VITE_*` values into the generated JavaScript.
 
 Do not commit `.env`; use the hosting provider environment variables for production secrets.
 

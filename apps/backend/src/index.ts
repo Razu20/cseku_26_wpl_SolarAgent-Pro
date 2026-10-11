@@ -31,10 +31,19 @@ const port = Number(process.env.PORT || 4000);
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || env.CORS_ORIGINS.includes('*') || env.CORS_ORIGINS.includes(origin.replace(/\/+$/, ''))) {
+    const normalizedOrigin = origin
+      ? (() => {
+        try {
+          return new URL(origin).origin;
+        } catch {
+          return origin.replace(/\/+$/, '');
+        }
+      })()
+      : undefined;
+    if (!normalizedOrigin || env.CORS_ORIGINS.includes('*') || env.CORS_ORIGINS.includes(normalizedOrigin)) {
       return callback(null, true);
     }
-    return callback(new Error('cors_origin_not_allowed'));
+    return callback(null, false);
   },
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
