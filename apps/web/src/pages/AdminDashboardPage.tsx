@@ -123,33 +123,55 @@ export function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="panel">
-          <div className="panel-heading">
+        <section className="panel admin-quick-operations">
+          <div className="panel-heading admin-quick-heading">
             <div>
+              <span className="eyebrow">Workspace shortcuts</span>
               <h2>Quick Operations</h2>
-              <p>Direct navigation to system modules.</p>
+              <p>Jump directly to the areas that need attention.</p>
             </div>
+            <span className="admin-quick-status">5 modules</span>
           </div>
           <div className="shortcut-list">
-            <Link to="/admin/products">
-              <strong>Equipment Catalog</strong>
-              <span>Update prices, discounts, stock, images & specs</span>
+            <Link to="/admin/orders" className="shortcut-card shortcut-card-orders">
+              <span className="shortcut-icon">↗</span>
+              <span className="shortcut-card-copy">
+                <strong>Review project requests</strong>
+                <span>Check new orders, payment status, and technician assignments.</span>
+              </span>
+              <span className="shortcut-arrow">→</span>
             </Link>
-            <Link to="/admin/companies">
-              <strong>Brands & Manufacturers</strong>
-              <span>Manage LONGi, Jinko, Huawei, Growatt, Pylontech, etc.</span>
+            <Link to="/admin/products" className="shortcut-card shortcut-card-products">
+              <span className="shortcut-icon">⚡</span>
+              <span className="shortcut-card-copy">
+                <strong>Manage equipment catalog</strong>
+                <span>Update pricing, stock, images, discounts, and specifications.</span>
+              </span>
+              <span className="shortcut-arrow">→</span>
             </Link>
-            <Link to="/admin/categories">
-              <strong>Component Categories</strong>
-              <span>Panels, Inverters, Batteries, Turbines, BOS</span>
+            <Link to="/admin/technicians" className="shortcut-card shortcut-card-technicians">
+              <span className="shortcut-icon">✦</span>
+              <span className="shortcut-card-copy">
+                <strong>Coordinate technicians</strong>
+                <span>View availability, active jobs, certifications, and field teams.</span>
+              </span>
+              <span className="shortcut-arrow">→</span>
             </Link>
-            <Link to="/admin/orders">
-              <strong>Project Requests & Orders</strong>
-              <span>Review customer solar, wind and hybrid sizing requests</span>
+            <Link to="/admin/companies" className="shortcut-card shortcut-card-companies">
+              <span className="shortcut-icon">⌂</span>
+              <span className="shortcut-card-copy">
+                <strong>Manage brands & suppliers</strong>
+                <span>Maintain manufacturers, company profiles, and product relationships.</span>
+              </span>
+              <span className="shortcut-arrow">→</span>
             </Link>
-            <Link to="/admin/control">
-              <strong>Pricing & Formula Rates</strong>
-              <span>Configure BOS, installation, VAT, and engineering margins</span>
+            <Link to="/admin/control" className="shortcut-card shortcut-card-control">
+              <span className="shortcut-icon">⚙</span>
+              <span className="shortcut-card-copy">
+                <strong>Update pricing controls</strong>
+                <span>Configure installation, delivery, VAT, BOS, and engineering rates.</span>
+              </span>
+              <span className="shortcut-arrow">→</span>
             </Link>
           </div>
         </section>

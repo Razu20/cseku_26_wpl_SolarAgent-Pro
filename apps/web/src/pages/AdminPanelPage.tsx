@@ -19,8 +19,29 @@ interface AdminPanelPageProps {
   section?: AdminSection;
 }
 
+const ADMIN_PAGE_SIZE = 10;
+
+function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (page: number) => void }) {
+  const pageCount = Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE));
+  if (pageCount <= 1) return null;
+  const start = (page - 1) * ADMIN_PAGE_SIZE + 1;
+  const end = Math.min(page * ADMIN_PAGE_SIZE, total);
+
+  return (
+    <div className="admin-pagination" aria-label="Pagination">
+      <span>Showing {start}-{end} of {total}</span>
+      <div>
+        <button type="button" disabled={page === 1} onClick={() => onChange(page - 1)}>Previous</button>
+        <strong>Page {page} of {pageCount}</strong>
+        <button type="button" disabled={page === pageCount} onClick={() => onChange(page + 1)}>Next</button>
+      </div>
+    </div>
+  );
+}
+
 export function AdminPanelPage({ section }: AdminPanelPageProps) {
   const [activeTab, setActiveTab] = useState<AdminSection>(section || 'orders');
+  const [tablePage, setTablePage] = useState(1);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -285,6 +306,28 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
       corporateOffice: 'Level 9, Green Energy Tower, Banani, Dhaka-1213',
     },
   });
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [
+    activeTab,
+    orderFilterStatus,
+    orderFilterType,
+    orderSearch,
+    userSearch,
+    userRoleFilter,
+    techSearch,
+    techAvailabilityFilter,
+    productSearch,
+    productCompanyFilter,
+    productCategoryFilter,
+    companySearch,
+    categorySearch,
+    applianceSearch,
+    applianceCategoryFilter,
+    paymentSearch,
+    paymentStatusFilter,
+  ]);
 
   // Load Data on Tab or filter change
   useEffect(() => {
@@ -1013,6 +1056,18 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
     return c.name?.toLowerCase().includes(q) || c.slug?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q);
   });
 
+  const pageItems = <T,>(items: T[]) => items.slice((tablePage - 1) * ADMIN_PAGE_SIZE, tablePage * ADMIN_PAGE_SIZE);
+  const pagedOrders = pageItems(orders);
+  const pagedUsers = pageItems(users);
+  const pagedTechnicians = pageItems(technicians);
+  const pagedTechnicianTypes = pageItems(technicianTypes);
+  const pagedTechPayments = pageItems(techPayments);
+  const pagedAppliances = pageItems(appliances);
+  const pagedProducts = pageItems(filteredProducts);
+  const pagedCompanies = pageItems(filteredCompanies);
+  const pagedCategories = pageItems(filteredCategories);
+  const pagedPackages = pageItems(packages);
+
   // ==========================================
   // PACKAGE ACTIONS
   // ==========================================
@@ -1227,7 +1282,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                pagedOrders.map((order) => (
                   <tr key={order.id}>
                     <td>
                       <strong>{order.orderNumber}</strong>
@@ -1322,6 +1377,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               )}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={orders.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1367,7 +1423,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {pagedUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
                     <strong>{user.fullName || 'Anonymous'}</strong>
@@ -1428,6 +1484,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={users.length} onChange={setTablePage} />
 
           {/* Pagination */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
@@ -1471,7 +1528,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </tr>
             </thead>
             <tbody>
-              {technicians.map((tech) => (
+              {pagedTechnicians.map((tech) => (
                 <tr key={tech.id}>
                   <td>
                     <strong>{tech.name}</strong>
@@ -1525,6 +1582,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={technicians.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1554,7 +1612,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </tr>
             </thead>
             <tbody>
-              {technicianTypes.map((t) => (
+              {pagedTechnicianTypes.map((t) => (
                 <tr key={t.id}>
                   <td><strong>{t.name}</strong></td>
                   <td><code>{t.code}</code></td>
@@ -1588,6 +1646,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={technicianTypes.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1620,7 +1679,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </tr>
             </thead>
             <tbody>
-              {techPayments.map((p) => (
+              {pagedTechPayments.map((p) => (
                 <tr key={p.id}>
                   <td>
                     <code>{p.id.slice(0, 8)}</code>
@@ -1667,6 +1726,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={techPayments.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1698,7 +1758,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </tr>
             </thead>
             <tbody>
-              {appliances.map((a) => (
+              {pagedAppliances.map((a) => (
                 <tr key={a.id}>
                   <td>
                     <strong>{a.name}</strong>
@@ -1737,6 +1797,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={appliances.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1807,7 +1868,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((p) => {
+                pagedProducts.map((p) => {
                   const companyName = typeof p.company === 'object' ? p.company?.name : p.company || p.brand || 'General';
                   const categoryName = typeof p.categoryItem === 'object' ? p.categoryItem?.name : p.category;
                   const hasDiscount = p.discountPrice && Number(p.discountPrice) > 0 && Number(p.discountPrice) < Number(p.price);
@@ -1899,6 +1960,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               )}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={filteredProducts.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -1948,7 +2010,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredCompanies.map((c) => {
+                pagedCompanies.map((c) => {
                   const companyProductCount = products.filter((p) => p.companyId === c.id || (typeof p.company === 'string' && p.company === c.name)).length;
 
                   return (
@@ -2019,6 +2081,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               )}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={filteredCompanies.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -2067,7 +2130,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((cat) => {
+                pagedCategories.map((cat) => {
                   const catProductCount = products.filter((p) => p.categoryId === cat.id || p.category === cat.name).length;
 
                   return (
@@ -2120,6 +2183,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               )}
             </tbody>
           </table>
+          <Pagination page={tablePage} total={filteredCategories.length} onChange={setTablePage} />
         </section>
       )}
 
@@ -2139,7 +2203,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
           </div>
 
           <div className="packages-grid" style={{ marginTop: '16px' }}>
-            {packages.map((pkg) => (
+            {pagedPackages.map((pkg) => (
               <div key={pkg.id} className="package-card" style={{ position: 'relative' }}>
                 <span className="pill">{pkg.systemType?.toUpperCase()}</span>
                 <h3>{pkg.name}</h3>
@@ -2168,6 +2232,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
               </div>
             ))}
           </div>
+          <Pagination page={tablePage} total={packages.length} onChange={setTablePage} />
         </section>
       )}
 

@@ -1,0 +1,45 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Solar energy installation</title>
+  <desc id="desc">Solar panels beneath a bright sun in a renewable energy landscape.</desc>
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172554"/>
+      <stop offset="0.62" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#93C5FD"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="600" y1="470" x2="600" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14532D"/>
+      <stop offset="1" stop-color="#052E16"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#172554"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <circle cx="920" cy="170" r="116" fill="#FBBF24" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="920" cy="170" r="78" fill="#FDE68A"/>
+  <circle cx="920" cy="170" r="58" fill="#FBBF24"/>
+  <path d="M0 470C190 405 330 450 490 425C700 392 820 430 1200 365V800H0V470Z" fill="url(#ground)"/>
+  <path d="M0 560C230 490 390 530 570 500C790 465 940 505 1200 445" stroke="#22C55E" stroke-width="12" opacity="0.45"/>
+  <g transform="translate(110 270) skewY(-12)">
+    <rect x="0" y="0" width="650" height="300" rx="14" fill="#0F172A" stroke="#93C5FD" stroke-width="8"/>
+    <rect x="22" y="22" width="606" height="256" rx="5" fill="url(#panel)"/>
+    <g stroke="#60A5FA" stroke-width="3" opacity="0.72">
+      <path d="M123 22V278M224 22V278M325 22V278M426 22V278M527 22V278"/>
+      <path d="M22 86H628M22 150H628M22 214H628"/>
+    </g>
+    <path d="M110 300L45 470M540 300L605 470M325 300V465" stroke="#CBD5E1" stroke-width="12"/>
+    <path d="M35 470H615" stroke="#94A3B8" stroke-width="15" stroke-linecap="round"/>
+  </g>
+  <g opacity="0.9">
+    <path d="M1010 560C1030 500 1070 500 1088 560" stroke="#86EFAC" stroke-width="8" stroke-linecap="round"/>
+    <path d="M1070 560C1090 475 1145 478 1164 560" stroke="#4ADE80" stroke-width="10" stroke-linecap="round"/>
+    <path d="M60 625C80 560 125 565 142 625" stroke="#86EFAC" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <rect y="730" width="1200" height="70" fill="#020617" opacity="0.42"/>
+  <text x="60" y="775" fill="#FDE68A" font-family="Arial, sans-serif" font-size="26" font-weight="700" letter-spacing="2">CLEAN ENERGY • SMARTER TOMORROW</text>
+</svg>

@@ -100,9 +100,10 @@ export function AuthPage({ mode }: { mode: Mode }) {
     <main className="auth-page">
       <div className="auth-art">
         <Link className="auth-brand" to="/">
-          SA <span>SolarAgent Pro</span>
+          <span className="auth-brand-mark">SA</span>
+          <span>SolarAgent Pro</span>
         </Link>
-        <div>
+        <div className="auth-art-content">
           <span className="eyebrow">{isSignup ? 'Create your account' : 'Welcome back'}</span>
           <h1>{isSignup ? 'Build better energy decisions together.' : 'Your energy workspace, ready when you are.'}</h1>
           <p>
@@ -110,13 +111,22 @@ export function AuthPage({ mode }: { mode: Mode }) {
               ? 'Operate the full renewable-energy lifecycle from one controlled operations command center.'
               : 'Configure your customized Solar, Wind, or Hybrid system, review engineering estimates, and track verified installation.'}
           </p>
+          <div className="auth-benefits">
+            <span>✓ Smart system sizing</span>
+            <span>✓ Verified installation support</span>
+            <span>✓ One connected workspace</span>
+          </div>
         </div>
-        <div className="auth-art-note">Auditable engineering · Bangladesh meteorological modeling · Turnkey delivery</div>
+        <div className="auth-art-note"><span>⚡</span> Auditable engineering · Bangladesh meteorological modeling · Turnkey delivery</div>
       </div>
 
       <section className="auth-card">
+        <Link className="auth-mobile-brand" to="/">
+          <span className="auth-brand-mark">SA</span>
+          <span>SolarAgent Pro</span>
+        </Link>
         <div className="auth-card-heading">
-          <span className="eyebrow">SolarAgent Pro</span>
+          <span className="eyebrow">{isSignup ? 'Join the energy workspace' : 'Secure workspace access'}</span>
           <h2>{isSignup ? 'Create customer account' : 'Sign in'}</h2>
           <p>{isSignup ? 'Provide your Bangladesh installation details to get started.' : 'Continue to your workspace.'}</p>
         </div>
@@ -132,7 +142,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
           </div>
         )}
 
-        <form className="auth-form" onSubmit={submit}>
+        <form className={`auth-form${isSignup ? ' auth-signup-form' : ''}`} onSubmit={submit}>
           {isSignup && (
             <>
               <label>
@@ -255,10 +265,10 @@ export function AuthPage({ mode }: { mode: Mode }) {
             </label>
           )}
 
-          {error && <div className="notice" style={{ borderColor: '#e53e3e', color: '#c53030' }}>{error}</div>}
+          {error && <div className="auth-error" role="alert"><span>!</span>{error}</div>}
 
           <button className="primary-button auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Processing...' : isSignup ? 'Create Customer Account' : `Sign In as ${role === 'admin' ? 'Administrator' : 'Customer'}`}
+            {loading ? 'Processing...' : isSignup ? 'Create Customer Account' : `Continue as ${role === 'admin' ? 'Administrator' : 'Customer'}`}
           </button>
         </form>
 

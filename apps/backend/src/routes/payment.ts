@@ -4,7 +4,6 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { orders, payments } from '../db/schema.js';
 import { initializeSslCommerzPayment, verifyServerSidePayment } from '../services/payment.js';
-import { sendOrderConfirmationEmail } from '../services/email.js';
 import { requireAuth, type AuthenticatedRequest } from './auth.js';
 import { canTransitionOrderStatus } from '../lib/orderLifecycle.js';
 
@@ -197,23 +196,6 @@ paymentRoutes.post('/cod/confirm', requireAuth, async (req: AuthenticatedRequest
       status: 'awaiting_payment',
       updatedAt: new Date(),
     }).where(eq(orders.id, order.id));
-
-    // Send confirmation email
-    if (!order.emailSent && order.email) {
-      await sendOrderConfirmationEmail({
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        customerEmail: order.email,
-        projectType: order.projectType,
-        totalAmount: Number(order.totalAmount),
-        paymentMethod: 'cod',
-        paymentStatus: 'pending (Cash on site inspection)',
-        division: order.division,
-        district: order.district,
-        address: order.address ?? undefined,
-      });
-      await db.update(orders).set({ emailSent: true }).where(eq(orders.id, order.id));
-    }
 
     return res.json({
       success: true,

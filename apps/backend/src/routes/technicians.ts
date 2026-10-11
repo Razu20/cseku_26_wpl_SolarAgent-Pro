@@ -214,6 +214,7 @@ technicianRoutes.post('/admin/assign-technician', requireAuth, requireRole(['adm
 
       const [updatedTech] = await tx.update(technicians).set({
         activeJobs: (tech.activeJobs || 0) + 1,
+        availability: 'busy',
         updatedAt: new Date(),
       }).where(eq(technicians.id, tech.id)).returning();
 
@@ -357,6 +358,7 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
         await db.update(technicians).set({
           completedJobs: (tech.completedJobs || 0) + 1,
           activeJobs: Math.max(0, (tech.activeJobs || 1) - 1),
+          availability: (tech.activeJobs || 1) > 1 ? 'busy' : 'available',
           updatedAt: new Date(),
         }).where(eq(technicians.id, tech.id));
 
@@ -410,7 +412,12 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
         updatedAt: new Date(),
       }).where(eq(technicianAssignments.orderId, order.id));
 
-      return res.json({ success: true, message: `Status updated to ${status}` });
+      await db.update(technicians).set({
+        availability: 'busy',
+        updatedAt: new Date(),
+      }).where(eq(technicians.id, tech.id));
+
+      return res.json({ success: true, message: `Status updated to ${status}`, technician: { id: tech.id, availability: 'busy' } });
     }
   } catch (err) {
     return res.status(500).json({ error: (err as Error).message });

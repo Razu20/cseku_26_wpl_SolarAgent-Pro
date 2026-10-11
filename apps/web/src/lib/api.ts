@@ -1,6 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '');
 
-type ApiOptions = { method?: string; headers?: Record<string, string>; body?: string };
+type ApiOptions = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
 
 export async function api<T>(path: string, options?: ApiOptions): Promise<T> {
   const token = localStorage.getItem('solaragent.token');
@@ -12,7 +16,16 @@ export async function api<T>(path: string, options?: ApiOptions): Promise<T> {
       ...(options?.headers || {}),
     },
   });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || `Request failed (${response.status})`);
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+    if (response.status === 401) {
+      localStorage.removeItem('solaragent.token');
+      localStorage.removeItem('solaragent.role');
+      localStorage.removeItem('solaragent.user');
+    }
+    throw new Error(payload?.message || payload?.error || `Request failed (${response.status})`);
+  }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }

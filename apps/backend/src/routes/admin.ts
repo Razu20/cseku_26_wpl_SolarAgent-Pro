@@ -235,7 +235,7 @@ adminRoutes.get('/admin/orders/:id', async (req, res) => {
 adminRoutes.patch('/admin/orders/:id', async (req, res) => {
   const { status, technicianId, scheduledDate, paymentStatus, notes } = req.body;
   try {
-    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, req.params.id));
+    const [current] = await db.select({ status: orders.status, technicianId: orders.technicianId }).from(orders).where(eq(orders.id, req.params.id));
     if (!current) return res.status(404).json({ error: 'order_not_found' });
     if (status && !canTransitionOrderStatus(current.status, status)) {
       return res.status(409).json({ error: 'invalid_order_status_transition', from: current.status, to: status });
@@ -253,7 +253,42 @@ adminRoutes.patch('/admin/orders/:id', async (req, res) => {
       .where(eq(orders.id, req.params.id))
       .returning();
 
-    return updated ? res.json({ order: updated }) : res.status(404).json({ error: 'order_not_found' });
+    if (!updated) return res.status(404).json({ error: 'order_not_found' });
+
+    if (technicianId !== undefined && technicianId !== current.technicianId) {
+      if (current.technicianId) {
+        const [oldTech] = await db.select().from(technicians).where(eq(technicians.id, current.technicianId));
+        if (oldTech) {
+          await db.update(technicians).set({
+            activeJobs: Math.max(0, (oldTech.activeJobs || 1) - 1),
+            availability: (oldTech.activeJobs || 1) > 1 ? 'busy' : 'available',
+            updatedAt: new Date(),
+          }).where(eq(technicians.id, oldTech.id));
+        }
+      }
+      if (technicianId) {
+        const [newTech] = await db.select().from(technicians).where(eq(technicians.id, technicianId));
+        if (newTech) {
+          await db.update(technicians).set({
+            activeJobs: (newTech.activeJobs || 0) + 1,
+            availability: 'busy',
+            updatedAt: new Date(),
+          }).where(eq(technicians.id, newTech.id));
+        }
+      }
+    } else if ((status === 'completed' || status === 'cancelled') && current.technicianId) {
+      const [tech] = await db.select().from(technicians).where(eq(technicians.id, current.technicianId));
+      if (tech) {
+        await db.update(technicians).set({
+          activeJobs: Math.max(0, (tech.activeJobs || 1) - 1),
+          ...(status === 'completed' ? { completedJobs: (tech.completedJobs || 0) + 1 } : {}),
+          availability: (tech.activeJobs || 1) > 1 ? 'busy' : 'available',
+          updatedAt: new Date(),
+        }).where(eq(technicians.id, tech.id));
+      }
+    }
+
+    return res.json({ order: updated });
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }

@@ -5,9 +5,9 @@ import { db } from '../db/client.js';
 import { appliances, categories, companies, orders, packages, productCatalog, projectRequestAppliances, projectRequests, users, notifications } from '../db/schema.js';
 import { calculateRenewableProject } from '../services/renewableCalculation.js';
 import { fetchWeatherForLocation } from '../services/weather.js';
-import { sendOrderConfirmationEmail } from '../services/email.js';
 import { reserveStockForOrder, releaseStockForOrder } from './inventory.js';
 import { canTransitionOrderStatus } from '../lib/orderLifecycle.js';
+import type { AuthenticatedRequest } from './auth.js';
 
 export const renewableRoutes = Router();
 
@@ -337,11 +337,13 @@ const requestCreationSchema = estimateSchema.extend({
   paymentMethod: z.enum(['sslcommerz', 'cod']).default('cod'),
 });
 
-renewableRoutes.post('/requests', async (req, res) => {
+renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
   const parsed = requestCreationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
+    const requestUserId = parsed.data.userId || req.user?.id;
+
     // 1. Run full engineering calculation
     const estimate = await calculateRenewableProject({
       type: parsed.data.type,
@@ -356,7 +358,7 @@ renewableRoutes.post('/requests', async (req, res) => {
 
     // 2. Save projectRequest
     const [request] = await db.insert(projectRequests).values({
-      userId: parsed.data.userId,
+      userId: requestUserId,
       type: parsed.data.type,
       status: 'submitted',
       configuration: {
@@ -367,7 +369,7 @@ renewableRoutes.post('/requests', async (req, res) => {
     }).returning();
 
     // 3. Save appliances selected
-    const validAppliances = parsed.data.appliances.filter((a) => a.applianceId.includes('-'));
+    const validAppliances = parsed.data.appliances.filter((a) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(a.applianceId));
     if (validAppliances.length > 0) {
       await db.insert(projectRequestAppliances).values(
         validAppliances.map((s) => ({
@@ -381,11 +383,13 @@ renewableRoutes.post('/requests', async (req, res) => {
 
     // 4. Generate Order Record
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-    const initialStatus = parsed.data.paymentMethod === 'sslcommerz' ? 'awaiting_payment' : 'submitted';
+    // Both payment methods require review before work begins. Keeping the order
+    // in this state from creation avoids a second client request for COD orders.
+    const initialStatus = 'awaiting_payment';
 
     const [order] = await db.insert(orders).values({
       orderNumber,
-      userId: parsed.data.userId,
+      userId: requestUserId,
       projectRequestId: request.id,
       projectType: parsed.data.type,
       status: initialStatus,
@@ -429,45 +433,30 @@ renewableRoutes.post('/requests', async (req, res) => {
     }
 
     // 6. Notifications
-    await db.insert(notifications).values({
-      role: 'admin',
-      title: `New Order Placed: #${orderNumber}`,
-      message: `${parsed.data.customerName} submitted a ${parsed.data.type.toUpperCase()} project order (BDT ${Number(estimate.pricing.finalTotal).toLocaleString()}) in ${parsed.data.location.district}.`,
-      type: 'order',
-      link: '/admin/orders',
-    });
-
-    if (parsed.data.userId) {
+    try {
       await db.insert(notifications).values({
-        role: 'customer',
-        userId: parsed.data.userId,
-        title: `Order Confirmed: #${orderNumber}`,
-        message: `Your project request has been logged. Our engineering dispatch team will verify site details shortly.`,
+        role: 'admin',
+        title: `New Order Placed: #${orderNumber}`,
+        message: `${parsed.data.customerName} submitted a ${parsed.data.type.toUpperCase()} project order (BDT ${Number(estimate.pricing.finalTotal).toLocaleString()}) in ${parsed.data.location.district}.`,
         type: 'order',
-        link: '/customer',
+        link: '/admin/orders',
       });
+
+      if (requestUserId) {
+        await db.insert(notifications).values({
+          role: 'customer',
+          userId: requestUserId,
+          title: `Order Confirmed: #${orderNumber}`,
+          message: `Your project request has been logged. Our engineering dispatch team will verify site details shortly.`,
+          type: 'order',
+          link: '/customer',
+        });
+      }
+    } catch (notificationError) {
+      console.error('Project notification creation failed after order submission:', notificationError);
     }
 
-    // 7. Send order confirmation email if email is provided
-    if (parsed.data.email) {
-      void sendOrderConfirmationEmail({
-        orderNumber,
-        customerName: parsed.data.customerName,
-        customerEmail: parsed.data.email,
-        projectType: parsed.data.type,
-        systemCapacityKwp: estimate.systemSizing.totalSystemCapacityKwp,
-        totalAmount: estimate.pricing.finalTotal,
-        paymentMethod: parsed.data.paymentMethod,
-        paymentStatus: 'pending',
-        division: parsed.data.location.division,
-        district: parsed.data.location.district,
-        address: parsed.data.address,
-      }).then(() => {
-        db.update(orders).set({ emailSent: true }).where(eq(orders.id, order.id)).catch(() => null);
-      }).catch(() => null);
-    }
-
-    return res.status(201).json({ request, order, estimate });
+    return res.status(201).json({ request, order, estimate, message: 'Project request submitted successfully.' });
   } catch (error) {
     console.error('Request creation error:', error);
     return res.status(500).json({ error: (error as Error).message || 'request_creation_failed' });

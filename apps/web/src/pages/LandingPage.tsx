@@ -284,7 +284,7 @@ export function LandingPage() {
             <div className="hero-card-inner">
               <div className="hero-badge-live">● Live Equipment Marketplace</div>
               <img
-                src="https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop&q=80"
+                src="/solar-energy-hero.svg"
                 alt="Solar and renewable equipment installation"
                 className="hero-main-img"
               />
@@ -310,7 +310,7 @@ export function LandingPage() {
             <p>Select a renewable architecture to explore customized equipment setups</p>
           </div>
 
-          <div className="project-types-cards">
+          <div className="project-types-cards" role="region" aria-label="Project types">
             <div
               className="type-card solar-type"
               onClick={() => handleQuickProjectCategory('solar')}

@@ -28,6 +28,10 @@ export async function initializeSslCommerzPayment(input: SslcommerzInitInput): P
   const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+  if (process.env.NODE_ENV === 'production' && (!process.env.SSLCOMMERZ_STORE_ID || !process.env.SSLCOMMERZ_STORE_PASSWORD)) {
+    throw new Error('sslcommerz_credentials_missing');
+  }
+
   const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
   // Check if an order already has an active payment to prevent duplicate charges
@@ -99,7 +103,11 @@ export async function initializeSslCommerzPayment(input: SslcommerzInitInput): P
     }
   }
 
-  // Deterministic Sandbox Gateway URL / Simulator for developer and demonstration testing
+  if (!isSandbox) {
+    throw new Error('sslcommerz_gateway_unavailable');
+  }
+
+  // Deterministic Sandbox Gateway URL / Simulator for local development.
   const sandboxGatewayUrl = `${backendUrl}/api/v1/payments/sslcommerz/simulator?tran_id=${transactionId}&amount=${input.totalAmount}&order_id=${input.orderId}&return_url=${encodeURIComponent(`${frontendUrl}/customer?payment=success&tran_id=${transactionId}`)}`;
 
   return {

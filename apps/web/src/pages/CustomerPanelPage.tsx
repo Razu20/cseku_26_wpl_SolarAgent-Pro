@@ -12,6 +12,22 @@ import { PackageCustomizerModal } from '../components/PackageCustomizerModal';
 
 type ProjectType = 'solar' | 'wind' | 'hybrid';
 type SystemType = 'on-grid' | 'off-grid' | 'hybrid-grid';
+const CUSTOMER_PAGE_SIZE = 10;
+
+function CustomerPagination({ page, total, onChange }: { page: number; total: number; onChange: (page: number) => void }) {
+  const pageCount = Math.max(1, Math.ceil(total / CUSTOMER_PAGE_SIZE));
+  if (pageCount <= 1) return null;
+  return (
+    <div className="customer-pagination">
+      <span>Showing {(page - 1) * CUSTOMER_PAGE_SIZE + 1}-{Math.min(page * CUSTOMER_PAGE_SIZE, total)} of {total}</span>
+      <div>
+        <button type="button" disabled={page === 1} onClick={() => onChange(page - 1)}>Previous</button>
+        <strong>Page {page} of {pageCount}</strong>
+        <button type="button" disabled={page === pageCount} onClick={() => onChange(page + 1)}>Next</button>
+      </div>
+    </div>
+  );
+}
 
 interface Appliance {
   id: string;
@@ -73,6 +89,7 @@ export function CustomerPanelPage() {
   const [productsCatalog, setProductsCatalog] = useState<any[]>([]);
   const [packagesCatalog, setPackagesCatalog] = useState<any[]>([]);
   const [ordersList, setOrdersList] = useState<any[]>([]);
+  const [customerPage, setCustomerPage] = useState(1);
 
   // User Profile
   const storedUser = localStorage.getItem('solaragent.user') ? JSON.parse(localStorage.getItem('solaragent.user')!) : null;
@@ -132,6 +149,13 @@ export function CustomerPanelPage() {
   const [viewingOrderDoc, setViewingOrderDoc] = useState<any | null>(null);
   const [customizingPackage, setCustomizingPackage] = useState<any | null>(null);
 
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [activeTab]);
+
+  const pagedCustomerOrders = ordersList.slice((customerPage - 1) * CUSTOMER_PAGE_SIZE, customerPage * CUSTOMER_PAGE_SIZE);
+  const pagedCustomerPackages = packagesCatalog.slice((customerPage - 1) * CUSTOMER_PAGE_SIZE, customerPage * CUSTOMER_PAGE_SIZE);
+
   // Load catalogs on mount
   useEffect(() => {
     void api<{ appliances: Appliance[] }>('/renewable/appliances')
@@ -158,11 +182,41 @@ export function CustomerPanelPage() {
     void loadUserOrders();
 
     if (paymentStatusParam === 'success') {
-      setSuccessNotice(`Payment successfully verified via SSLCommerz! Transaction ID: ${tranIdParam || 'N/A'}. A confirmation email has been dispatched.`);
+      setSuccessNotice(`Payment successfully verified via SSLCommerz! Transaction ID: ${tranIdParam || 'N/A'}. Your project status is now updated.`);
     } else if (paymentStatusParam === 'failed') {
       setErrorMessage('Payment transaction was unsuccessful or was cancelled. You may re-try payment or select Cash on Delivery.');
     }
   }, []);
+
+  useEffect(() => {
+    if (productsCatalog.length === 0) return;
+    const rawPendingProject = localStorage.getItem('solaragent.pending_project');
+    if (!rawPendingProject) return;
+
+    try {
+      const pendingProject = JSON.parse(rawPendingProject) as {
+        projectType?: ProjectType;
+        items?: Array<{ product?: { id?: string; category?: string } }>;
+      };
+      const pendingItems = pendingProject.items || [];
+      const findProductId = (terms: string[]) => {
+        const item = pendingItems.find((entry) => terms.some((term) => (entry.product?.category || '').toLowerCase().includes(term)));
+        return item?.product?.id || '';
+      };
+
+      setProjectType(pendingProject.projectType || 'solar');
+      setSelectedPanelId(findProductId(['panel', 'module', 'solar']));
+      setSelectedInverterId(findProductId(['inverter']));
+      setSelectedBatteryId(findProductId(['battery', 'storage']));
+      setSelectedTurbineId(findProductId(['wind', 'turbine']));
+      setWizardStep(4);
+      setSuccessNotice(`Equipment Builder configuration synced: ${pendingItems.length} catalog item${pendingItems.length === 1 ? '' : 's'} loaded into your sizing workflow.`);
+      localStorage.removeItem('solaragent.pending_project');
+    } catch (error) {
+      console.error('Failed to sync pending equipment builder configuration:', error);
+      localStorage.removeItem('solaragent.pending_project');
+    }
+  }, [productsCatalog.length]);
 
   async function loadUserOrders() {
     try {
@@ -284,6 +338,7 @@ export function CustomerPanelPage() {
     try {
       const payload = {
         type: projectType,
+        userId: storedUser?.id || undefined,
         location,
         configuration: {
           system: configuration.system,
@@ -366,12 +421,7 @@ export function CustomerPanelPage() {
         window.location.href = initRes.gatewayUrl;
         return;
       } else {
-        // COD Order confirmed
-        await api('/payments/cod/confirm', {
-          method: 'POST',
-          body: JSON.stringify({ orderId: newOrder.id }),
-        });
-        setSuccessNotice(`Project registered successfully under order number ${newOrder.orderNumber}! Payment will be verified upon on-site physical inspection. A confirmation email has been dispatched.`);
+        setSuccessNotice(`Project submitted successfully under order number ${newOrder.orderNumber}! Payment will be verified upon on-site physical inspection.`);
         await loadUserOrders();
         setActiveTab('orders');
       }
@@ -399,16 +449,21 @@ export function CustomerPanelPage() {
   return (
     <main className="workspace-page customer-page">
       {/* Page Heading & Global Nav */}
-      <div className="page-heading customer-heading">
+      <div className="page-heading customer-heading customer-workspace-hero">
         <div>
-          <span className="eyebrow">Customer Operations Portal</span>
+          <span className="eyebrow">SolarAgent Pro · Customer Portal</span>
           <h1>Renewable Energy Workspace</h1>
           <p>
             Configure custom Solar, Wind, and Hybrid systems, inspect meteorological data, and manage verified installation.
           </p>
+          <div className="customer-hero-stats" aria-label="Workspace features">
+            <span><strong>01</strong> Guided sizing</span>
+            <span><strong>02</strong> Local weather data</span>
+            <span><strong>03</strong> Verified installation</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span className="pill success">Connected: Bangladesh Feed</span>
+        <div className="customer-hero-status">
+          <span className="pill success">● Bangladesh feed connected</span>
           <div className="customer-avatar">
             {userProfile.fullName ? userProfile.fullName.slice(0, 2).toUpperCase() : 'CU'}
           </div>
@@ -416,7 +471,7 @@ export function CustomerPanelPage() {
       </div>
 
       {/* Main Tabs Navigation */}
-      <nav className="tab-navigation">
+      <nav className="tab-navigation customer-tabs" aria-label="Customer workspace navigation">
         <button
           className={`tab-btn ${activeTab === 'request' ? 'active' : ''}`}
           onClick={() => setActiveTab('request')}
@@ -452,21 +507,55 @@ export function CustomerPanelPage() {
         </button>
       </nav>
 
-      {/* Global Alerts */}
-      {successNotice && (
-        <div className="notice success-notice" style={{ borderColor: '#38a169', background: '#f0fff4', color: '#22543d' }}>
-          <span>✓ {successNotice}</span>
-          <button className="text-button" onClick={() => setSuccessNotice('')} style={{ float: 'right' }}>
-            ✕
-          </button>
-        </div>
-      )}
-      {errorMessage && (
-        <div className="notice error-notice" style={{ borderColor: '#e53e3e', background: '#fff5f5', color: '#9b2c2c' }}>
-          <span>⚠️ {errorMessage}</span>
-          <button className="text-button" onClick={() => setErrorMessage('')} style={{ float: 'right' }}>
-            ✕
-          </button>
+      {/* Global confirmation modal */}
+      {(successNotice || errorMessage) && (
+        <div
+          className={`customer-confirmation-overlay ${errorMessage ? 'is-error' : 'is-success'}`}
+          role="presentation"
+          onClick={() => {
+            setSuccessNotice('');
+            setErrorMessage('');
+          }}
+        >
+          <section
+            className="customer-confirmation-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="customer-confirmation-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="customer-confirmation-icon" aria-hidden="true">
+              {errorMessage ? '!' : '✓'}
+            </div>
+            <div className="customer-confirmation-content">
+              <span className="eyebrow">{errorMessage ? 'Action needs attention' : 'Request update'}</span>
+              <h2 id="customer-confirmation-title">{errorMessage ? 'Unable to complete request' : 'Request completed successfully'}</h2>
+              <p>{errorMessage || successNotice}</p>
+            </div>
+            <button
+              type="button"
+              className="customer-confirmation-close"
+              aria-label="Close confirmation"
+              onClick={() => {
+                setSuccessNotice('');
+                setErrorMessage('');
+              }}
+            >
+              ×
+            </button>
+            <div className="customer-confirmation-actions">
+              <button
+                type="button"
+                className={errorMessage ? 'primary-button' : 'secondary-button'}
+                onClick={() => {
+                  setSuccessNotice('');
+                  setErrorMessage('');
+                }}
+              >
+                {errorMessage ? 'Close and try again' : 'Continue'}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -474,10 +563,10 @@ export function CustomerPanelPage() {
       {activeTab === 'request' && (
         <div className="request-flow">
           {/* Project Type Selector */}
-          <section className="package-grid">
+          <section className="package-grid customer-project-types">
             <button
               type="button"
-              className={`package-option ${projectType === 'solar' ? 'selected-option' : ''}`}
+              className={`package-option customer-project-card ${projectType === 'solar' ? 'selected-option' : ''}`}
               onClick={() => {
                 setProjectType('solar');
                 setEstimate(null);
@@ -491,7 +580,7 @@ export function CustomerPanelPage() {
 
             <button
               type="button"
-              className={`package-option ${projectType === 'wind' ? 'selected-option' : ''}`}
+              className={`package-option customer-project-card ${projectType === 'wind' ? 'selected-option' : ''}`}
               onClick={() => {
                 setProjectType('wind');
                 setEstimate(null);
@@ -505,7 +594,7 @@ export function CustomerPanelPage() {
 
             <button
               type="button"
-              className={`package-option ${projectType === 'hybrid' ? 'selected-option' : ''}`}
+              className={`package-option customer-project-card ${projectType === 'hybrid' ? 'selected-option' : ''}`}
               onClick={() => {
                 setProjectType('hybrid');
                 setEstimate(null);
@@ -550,7 +639,7 @@ export function CustomerPanelPage() {
               </div>
 
               <div className="recommended-packages-grid">
-                {packagesCatalog.map((pkg) => (
+                {pagedCustomerPackages.map((pkg) => (
                   <div key={pkg.id} className="package-card">
                     <div className="package-card-header">
                       <span className="pill">{pkg.systemType?.toUpperCase()}</span>
@@ -617,18 +706,22 @@ export function CustomerPanelPage() {
 
               {/* STEP 1: LOCATION & ROOFTOP */}
               {wizardStep === 1 && (
-                <section className="panel assessment-panel">
-                  <div className="panel-heading">
+                <section className="panel assessment-panel customer-step1-panel">
+                  <div className="panel-heading customer-step-heading">
                     <div>
-                      <span className="eyebrow">Step 1 of 6 · Location & Site Constraints</span>
+                      <div className="customer-step-kicker"><span className="step-kicker-number">01</span><span>Location & site</span></div>
                       <h2>Installation Site Identification</h2>
                       <p>
-                        Dependent Bangladesh administrative hierarchy calibrates local solar insolation (PSH) and wind velocity.
+                        Tell us where the system will be installed. We use this information to estimate sun hours, wind conditions, and structural requirements.
                       </p>
+                    </div>
+                    <div className="customer-step-helper">
+                      <span className="customer-step-helper-icon">⌖</span>
+                      <span><strong>Why we ask</strong><small>Accurate location means a more reliable first estimate.</small></span>
                     </div>
                   </div>
 
-                  <div className="customer-form">
+                  <div className="customer-form customer-step1-form">
                     <label>
                       Division
                       <select value={location.division} onChange={(e) => onDivisionChange(e.target.value)} required>
@@ -1572,8 +1665,9 @@ export function CustomerPanelPage() {
               You haven't submitted any renewable project orders yet. Use the 'Project Request' tab to configure your first system!
             </div>
           ) : (
+            <>
             <div className="orders-grid">
-              {ordersList.map((ord) => (
+              {pagedCustomerOrders.map((ord) => (
                 <div key={ord.id} className="order-summary-card">
                   <div className="order-card-header">
                     <div>
@@ -1621,6 +1715,8 @@ export function CustomerPanelPage() {
                 </div>
               ))}
             </div>
+            <CustomerPagination page={customerPage} total={ordersList.length} onChange={setCustomerPage} />
+            </>
           )}
         </section>
       )}
@@ -1637,7 +1733,7 @@ export function CustomerPanelPage() {
           </div>
 
           <div className="recommended-packages-grid">
-            {packagesCatalog.map((pkg) => (
+            {pagedCustomerPackages.map((pkg) => (
               <div key={pkg.id} className="package-card">
                 <div className="package-card-header">
                   <span className="pill">{pkg.systemType?.toUpperCase()}</span>
@@ -1670,6 +1766,7 @@ export function CustomerPanelPage() {
               </div>
             ))}
           </div>
+          <CustomerPagination page={customerPage} total={packagesCatalog.length} onChange={setCustomerPage} />
         </section>
       )}
 

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { adminSettings, orders, supportTickets } from '../db/schema.js';
+import { adminSettings, categories, orders, productCatalog, supportTickets, technicians } from '../db/schema.js';
 
 export interface ChatbotRequest {
   mode: 'org_support' | 'technical_assistant';
@@ -32,11 +32,31 @@ export async function processChatbotMessage(req: ChatbotRequest): Promise<{ repl
     helplineNumber: '+880 9612-SOLAR (76527)',
     supportEmail: 'support@solaragent.com.bd',
   };
+  const [catalog, categoryRows, technicianRows] = await Promise.all([
+    db.select({ name: productCatalog.name, category: productCatalog.category, price: productCatalog.regularPrice }).from(productCatalog),
+    db.select({ name: categories.name }).from(categories),
+    db.select({ name: technicians.name, availability: technicians.availability, active: technicians.active }).from(technicians),
+  ]);
 
   // ----------------------------------------------------
   // MODE A: ORGANIZATION SUPPORT
   // ----------------------------------------------------
   if (mode === 'org_support') {
+    if (lowerMsg.includes('catalog') || lowerMsg.includes('equipment') || lowerMsg.includes('product') || lowerMsg.includes('builder')) {
+      const categoryNames = categoryRows.map((row) => row.name).filter(Boolean).slice(0, 8).join(', ');
+      return {
+        reply: `The **Project Equipment Builder** lets you combine live catalog equipment into a project estimate. Our database currently has **${catalog.length} equipment items** across categories such as ${categoryNames || 'solar panels, inverters, batteries, wind turbines, and accessories'}. You can add equipment from the marketplace, adjust quantities in the side drawer, rename the project, switch between Solar/Wind/Hybrid, and continue to the sizing calculator.`,
+        actionSuggestion: 'Ask me about a product category, pricing, project sizing, or how to submit your configuration.',
+      };
+    }
+    if (lowerMsg.includes('technician') || lowerMsg.includes('engineer') || lowerMsg.includes('installation team')) {
+      const activeTechnicians = technicianRows.filter((row) => row.active);
+      const availableTechnicians = activeTechnicians.filter((row) => row.availability === 'available').length;
+      return {
+        reply: `SolarAgent dispatches certified technicians after project review and payment/order confirmation. The system currently tracks **${activeTechnicians.length} active technicians**, with **${availableTechnicians} marked available**. Assigned technicians move to busy status while work is active, and their completed-job and earning records are updated when installation is completed.`,
+        actionSuggestion: 'Ask about an order number to see its assigned technician and installation status.',
+      };
+    }
     // 1. Order Status Lookup
     const orderMatch = lowerMsg.match(/(ord-\d+-[a-z0-9]+|ord-[a-z0-9-]+)/i) || userMessage.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
     if (orderMatch) {
