@@ -44,6 +44,34 @@ async function migrateShop() {
       ALTER TABLE product_catalog ADD COLUMN IF NOT EXISTS availability text NOT NULL DEFAULT 'in_stock';
       ALTER TABLE product_catalog ADD COLUMN IF NOT EXISTS featured boolean NOT NULL DEFAULT false;
 
+      -- Keep older databases compatible with the current technician model.
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS user_id uuid;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS division text DEFAULT 'Dhaka';
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS district text DEFAULT 'Dhaka';
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS upazila text DEFAULT 'Gulshan';
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS village text DEFAULT 'Gulshan-2';
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS solar_experience_years integer DEFAULT 3;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS wind_experience_years integer DEFAULT 1;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS hybrid_experience_years integer DEFAULT 2;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS certifications jsonb DEFAULT '[]'::jsonb;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS rating numeric(3, 2) DEFAULT 4.85;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS completed_jobs integer DEFAULT 0;
+      ALTER TABLE technicians ADD COLUMN IF NOT EXISTS active_jobs integer DEFAULT 0;
+
+      -- Keep older package tables compatible with the current package catalog.
+      ALTER TABLE packages ADD COLUMN IF NOT EXISTS package_type text DEFAULT 'solar';
+      ALTER TABLE packages ADD COLUMN IF NOT EXISTS turbine_product_id uuid;
+      ALTER TABLE packages ADD COLUMN IF NOT EXISTS turbine_quantity integer DEFAULT 0;
+      ALTER TABLE packages ADD COLUMN IF NOT EXISTS battery_quantity integer DEFAULT 1;
+      ALTER TABLE packages ADD COLUMN IF NOT EXISTS component_breakdown jsonb DEFAULT '[]'::jsonb;
+
+      -- Keep older supplier tables compatible with the current company catalog.
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS lead_time_days integer DEFAULT 7;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS min_order_quantity integer DEFAULT 5;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS categories_supplied jsonb DEFAULT '["Solar Panel", "Inverter"]'::jsonb;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS rating numeric(3, 2) DEFAULT 4.90;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS verified boolean DEFAULT true;
+
       CREATE TABLE IF NOT EXISTS project_products (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         project_id uuid REFERENCES project_requests(id) ON DELETE CASCADE,
