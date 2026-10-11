@@ -988,6 +988,11 @@ export async function seedMarketplace() {
     db.select({ id: categories.id }).from(categories),
     db.select({ id: productCatalog.id }).from(productCatalog),
   ]);
+  if (companyCount.length < companyData.length || categoryCount.length < categoryData.length || productCount.length < productsList.length) {
+    throw new Error(
+      `Marketplace seed verification failed: expected at least ${companyData.length} companies, ${categoryData.length} categories, and ${productsList.length} products`
+    );
+  }
   console.log(
     `Seeding Marketplace complete! Companies: ${companyCount.length}, categories: ${categoryCount.length}, products: ${productCount.length}.`
   );

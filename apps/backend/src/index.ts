@@ -22,6 +22,8 @@ import { inventoryRoutes } from './routes/inventory.js';
 import { supplierRoutes } from './routes/suppliers.js';
 import { technicianRoutes } from './routes/technicians.js';
 import { notificationRoutes } from './routes/notifications.js';
+import { db } from './db/client.js';
+import { sql } from 'drizzle-orm';
 
 export const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -32,8 +34,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'solaragent-backend' });
+app.get('/health', async (_req, res) => {
+  try {
+    await db.execute(sql`select 1`);
+    res.json({ ok: true, service: 'solaragent-backend', database: 'connected' });
+  } catch (error) {
+    console.error('Health check database failure:', error);
+    res.status(503).json({ ok: false, service: 'solaragent-backend', database: 'unavailable' });
+  }
 });
 
 app.use('/api/v1/auth', authRoutes);

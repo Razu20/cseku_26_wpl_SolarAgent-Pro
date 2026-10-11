@@ -145,9 +145,10 @@ authRoutes.post('/signup', async (req, res) => {
 
   try {
     const targetRole = parsed.data.role || 'customer';
+    const email = parsed.data.email.trim().toLowerCase();
 
     const [user] = await db.insert(users).values({
-      email: parsed.data.email,
+      email,
       passwordHash: hashPassword(parsed.data.password),
       role: targetRole,
       fullName: parsed.data.fullName,
@@ -163,7 +164,7 @@ authRoutes.post('/signup', async (req, res) => {
       await db.insert(technicians).values({
         userId: user.id,
         name: parsed.data.fullName,
-        email: parsed.data.email,
+        email,
         contactNumber: parsed.data.contactNumber,
         division: parsed.data.division,
         district: parsed.data.district,
@@ -185,7 +186,7 @@ authRoutes.post('/signup', async (req, res) => {
         description: `Registered renewable energy equipment supplier based in ${parsed.data.district}, ${parsed.data.division}.`,
         website: parsed.data.companyWebsite || '',
         country: 'Bangladesh',
-        contactInformation: `${parsed.data.contactNumber} / ${parsed.data.email}`,
+        contactInformation: `${parsed.data.contactNumber} / ${email}`,
         status: 'active',
         verified: true,
         leadTimeDays: 7,
@@ -213,6 +214,10 @@ authRoutes.post('/signup', async (req, res) => {
     });
   } catch (error: unknown) {
     const code = (error as { code?: string }).code;
+    console.error('Signup failed:', {
+      code,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return res.status(code === '23505' ? 409 : 503).json({ error: code === '23505' ? 'email_already_registered' : 'database_unavailable' });
   }
 });
