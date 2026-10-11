@@ -104,13 +104,23 @@ export function AdminDashboardPage() {
 
       <section className="admin-control-grid">
         <section className="panel control-hero">
-          <span className="eyebrow">Equipment & Planning Control</span>
-          <h2>Marketplace Operations & Logistics</h2>
-          <p>
+          <div className="control-hero-heading">
+            <span className="control-hero-icon">⚡</span>
+            <div>
+              <span className="eyebrow">Equipment & Planning Control</span>
+              <h2>Marketplace Operations & Logistics</h2>
+            </div>
+          </div>
+          <p className="control-hero-description">
             Add or update products, edit pricing in BDT, manage brand logos, adjust stock availability,
             and monitor customer system sizing requests in real-time.
           </p>
-          <div className="control-actions">
+          <div className="control-hero-points">
+            <span>✓ Live equipment catalog</span>
+            <span>✓ Pricing and stock controls</span>
+            <span>✓ Planning request visibility</span>
+          </div>
+          <div className="control-actions control-hero-actions">
             <Link className="primary-button" href="/admin/products">
               + Manage Products & Pricing
             </Link>

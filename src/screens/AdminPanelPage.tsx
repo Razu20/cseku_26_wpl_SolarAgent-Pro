@@ -2251,7 +2251,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '20px', marginTop: '20px' }}>
+          <div className="admin-control-settings-grid">
             
             {/* 1. Installation Price & Label */}
             <div className="control-card-section">
@@ -2390,9 +2390,18 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
             </div>
 
             {/* 5. Documentation & Labels */}
-            <div className="control-card-section" style={{ gridColumn: '1 / -1' }}>
-              <h4>5. Documentation, Legal Terms & Statutory Compliance</h4>
-              <div className="form-grid-2" style={{ marginBottom: '14px' }}>
+            <div className="control-card-section documentation-control-section">
+              <div className="control-section-heading">
+                <div>
+                  <span className="control-section-number">05</span>
+                  <h4>Documentation, Legal Terms & Statutory Compliance</h4>
+                </div>
+                <span className="control-section-badge">Legal & compliance</span>
+              </div>
+              <p className="control-section-description">
+                Define the fee label, customer-facing warranty terms, and statutory standards shown on project documents.
+              </p>
+              <div className="form-grid-2 documentation-fee-grid">
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: '#4a5568' }}>Documentation Fee Label</label>
                   <input
@@ -2422,7 +2431,8 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '14px' }}>
+              <div className="documentation-text-grid">
+                <div className="documentation-field">
                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#4a5568' }}>Warranty & Interconnection Agreement Label</label>
                 <input
                   type="text"
@@ -2446,9 +2456,8 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   }
                   placeholder="Official warranty and agreement text rendered on generated Installation Documents..."
                 />
-              </div>
-
-              <div>
+                </div>
+                <div className="documentation-field">
                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#4a5568' }}>Standards & Compliance Label</label>
                 <input
                   type="text"
@@ -2472,6 +2481,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   }
                   placeholder="IEC & BNBC compliance notes..."
                 />
+                </div>
               </div>
             </div>
 

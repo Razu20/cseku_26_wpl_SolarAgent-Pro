@@ -1608,14 +1608,16 @@ export function CustomerPanelPage() {
                   </div>
 
                   {/* Terms & Conditions Checkbox */}
-                  <div style={{ marginTop: '20px', padding: '16px', background: '#f7fafc', borderRadius: '8px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <div className={`terms-confirmation ${confirmedTerms ? 'is-confirmed' : ''}`}>
+                    <label className="terms-confirmation-label">
                       <input
+                        className="terms-checkbox"
                         type="checkbox"
                         checked={confirmedTerms}
                         onChange={(e) => setConfirmedTerms(e.target.checked)}
                       />
-                      <span>
+                      <span className="terms-confirmation-copy">
+                        <strong>{confirmedTerms ? 'Policy acknowledged' : 'Policy acknowledgement required'}</strong>
                         I understand this is a preliminary engineering estimate. A certified SolarAgent Pro field technician will verify rooftop structural integrity, orientation, and shadow trajectories prior to final commissioning.
                       </span>
                     </label>
@@ -1626,7 +1628,7 @@ export function CustomerPanelPage() {
                       ← Back to Sizing Review
                     </button>
                     <button
-                      className="primary-button"
+                      className={`primary-button project-submit-button ${!confirmedTerms ? 'is-disabled' : ''}`}
                       onClick={() => void submitProjectOrder()}
                       type="button"
                       disabled={!confirmedTerms || submittingOrder}

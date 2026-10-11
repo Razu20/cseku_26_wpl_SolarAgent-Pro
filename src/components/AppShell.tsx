@@ -31,12 +31,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [role, setRole] = useState<'admin' | 'customer'>('customer');
+  const [role, setRole] = useState<'admin' | 'customer' | null>(null);
   const links = role === 'admin' ? adminLinks : customerLinks;
 
   useEffect(() => {
     setRole(localStorage.getItem('solaragent.role') === 'admin' ? 'admin' : 'customer');
     setMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!role) return;
     if (role === 'admin' && pathname === '/customer') router.replace('/admin/dashboard');
     if (role === 'customer' && pathname.startsWith('/admin')) router.replace('/customer');
   }, [pathname, router, role]);
@@ -54,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="brand-mark"><span>SA</span><div><strong>SolarAgent</strong><small>Operations platform</small></div></div>
         <nav className="nav-list" aria-label="Primary navigation">
           <span className="nav-section-label">{role === 'admin' ? 'Admin workspace' : 'Customer workspace'}</span>
-          {links.map(([label, path]) => <Link key={path} href={path} className={pathname === path ? 'nav-link active' : 'nav-link'}>{label}</Link>)}
+          {links.map(([label, path]) => <Link key={path} href={path} prefetch={false} className={pathname === path ? 'nav-link active' : 'nav-link'}>{label}</Link>)}
         </nav>
         <div className="sidebar-bottom"><button className="nav-link nav-button" onClick={signOut}>Sign out</button></div>
       </aside>

@@ -46,7 +46,9 @@ export class Router {
       let index=0; let ended=false;
       const next:NextFunction=async (error?)=>{ if(error) throw error; const h=layer.handlers[index++]; if(h) await h(req,res,next); else ended=true; };
       try { await next(); } catch(error) { console.error(error); if(!ended) res.status(500).json({error:'internal_server_error'}); }
-      if ((res as any).statusCode !== undefined || ended) return true;
+      // Middleware can call `next()` without writing a response. A default
+      // status code alone must not prevent the next matching route layer.
+      if ((res as any).response !== undefined) return true;
     }
     return false;
   }
@@ -67,7 +69,6 @@ export function createResponse():Response & {response?:NextResponse; statusCode?
   const out:any={status(code:number){state.statusCode=code; return out;},json(data:any){state.response=NextResponse.json(data,{status:state.statusCode,headers:state.headers}); return out;},send(data:any=''){state.response=new NextResponse(typeof data==='string'?data:JSON.stringify(data),{status:state.statusCode,headers:state.headers}); return out;}}; out.redirect=(url:string)=>{state.response=NextResponse.redirect(url,state.statusCode); return out;};
   Object.defineProperties(out,{response:{get:()=>state.response},statusCode:{get:()=>state.statusCode}}); return out;
 }
-
 
 
 
