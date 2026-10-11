@@ -1995,8 +1995,8 @@ The current Week 1 foundation establishes the requirements, architecture, reposi
 
 This repository includes a Vercel configuration for the Vite frontend and Express API:
 
-1. Import the repository into Vercel with the repository root as the project root.
-2. Keep the build command as `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged).
+1. Import the repository into Vercel with the repository root as the project root. In Vercel, set **Root Directory** to `.` (not `apps/web` or `apps/backend`).
+2. Set the build command to `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged). Remove the old command that runs migrations and seeds.
 3. Keep the output directory as `apps/web/dist`.
 4. Add these environment variables in the Vercel project settings:
    - `DATABASE_URL`
