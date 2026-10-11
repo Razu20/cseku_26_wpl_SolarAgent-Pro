@@ -2050,6 +2050,8 @@ CORS_ORIGINS=https://your-frontend.vercel.app
 
 Changing `VITE_API_URL` requires a new frontend deployment because Vite embeds `VITE_*` values into the generated JavaScript.
 
+This repository also includes `apps/web/.env.production` with the public backend URL as a safe fallback. If the frontend Vercel project has `VITE_API_URL` configured, that value takes precedence. Redeploy the frontend after changing either value.
+
 Do not commit `.env`; use the hosting provider environment variables for production secrets.
 
 Run database setup separately from a trusted environment with network access to PostgreSQL:

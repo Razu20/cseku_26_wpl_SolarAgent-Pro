@@ -1,4 +1,5 @@
-const configuredApiUrl = import.meta.env.VITE_API_URL;
+const productionBackendUrl = 'https://cseku-26-wpl-solar-agent-pro-backen.vercel.app';
+const configuredApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? productionBackendUrl : undefined);
 const isLocalApiUrl = configuredApiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredApiUrl);
 const configuredApiBase = configuredApiUrl && !(import.meta.env.PROD && isLocalApiUrl)
   ? configuredApiUrl.replace(/\/+$/, '')
