@@ -137,7 +137,7 @@ paymentRoutes.post('/sslcommerz/success', async (req, res) => {
   const valId = req.body.val_id || req.query.val_id || `SIM_${Date.now()}`;
   const returnUrl = req.body.return_url || req.query.return_url;
 
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
   if (!tranId) {
     return res.status(400).send('Missing transaction id');
@@ -146,35 +146,35 @@ paymentRoutes.post('/sslcommerz/success', async (req, res) => {
   const verification = await verifyServerSidePayment(String(valId), String(tranId));
 
   if (verification.success) {
-    const redirectUrl = returnUrl ? decodeURIComponent(returnUrl) : `${appUrl}/customer?payment=success&orderId=${verification.orderId}&tran_id=${tranId}`;
+    const redirectUrl = returnUrl ? decodeURIComponent(returnUrl) : `${frontendUrl}/customer?payment=success&orderId=${verification.orderId}&tran_id=${tranId}`;
     return res.redirect(redirectUrl);
   } else {
-    return res.redirect(`${appUrl}/customer?payment=failed&error=${verification.error}`);
+    return res.redirect(`${frontendUrl}/customer?payment=failed&error=${verification.error}`);
   }
 });
 
 // 4. SSLCommerz Fail Callback
 paymentRoutes.post('/sslcommerz/fail', async (req, res) => {
   const tranId = req.body.tran_id || req.query.tran_id;
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
   if (tranId) {
     await db.update(payments).set({ status: 'failed' }).where(eq(payments.transactionId, String(tranId)));
   }
 
-  return res.redirect(`${appUrl}/customer?payment=failed&tran_id=${tranId}`);
+  return res.redirect(`${frontendUrl}/customer?payment=failed&tran_id=${tranId}`);
 });
 
 // 5. SSLCommerz Cancel Callback
 paymentRoutes.post('/sslcommerz/cancel', async (req, res) => {
   const tranId = req.body.tran_id || req.query.tran_id;
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
   if (tranId) {
     await db.update(payments).set({ status: 'cancelled' }).where(eq(payments.transactionId, String(tranId)));
   }
 
-  return res.redirect(`${appUrl}/customer?payment=cancelled&tran_id=${tranId}`);
+  return res.redirect(`${frontendUrl}/customer?payment=cancelled&tran_id=${tranId}`);
 });
 
 // 6. COD (Cash on Delivery / On-Site) Order Confirmation

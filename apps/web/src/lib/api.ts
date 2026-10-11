@@ -1,8 +1,11 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL;
 const isLocalApiUrl = configuredApiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredApiUrl);
-const API_BASE = (configuredApiUrl && !(import.meta.env.PROD && isLocalApiUrl)
-  ? configuredApiUrl
-  : (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1')).replace(/\/+$/, '');
+const configuredApiBase = configuredApiUrl && !(import.meta.env.PROD && isLocalApiUrl)
+  ? configuredApiUrl.replace(/\/+$/, '')
+  : undefined;
+const API_BASE = configuredApiBase
+  ? (configuredApiBase.endsWith('/api/v1') ? configuredApiBase : `${configuredApiBase}/api/v1`)
+  : (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1');
 
 type ApiOptions = {
   method?: string;
@@ -23,7 +26,7 @@ export async function api<T>(path: string, options?: ApiOptions): Promise<T> {
       },
     });
   } catch {
-    throw new Error('Unable to reach the SolarAgent API. Check the deployed /api route and database configuration.');
+    throw new Error('Unable to reach the SolarAgent API. Check VITE_API_URL, the backend health endpoint, and CORS configuration.');
   }
 
   if (!response.ok) {

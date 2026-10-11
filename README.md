@@ -1991,24 +1991,49 @@ Agentic Software Development
 
 The current Week 1 foundation establishes the requirements, architecture, repository organization, calculation-engine structure, AI-agent layer, and development methodology. Subsequent development should implement and validate the planned functionality while keeping the engineering calculations auditable and the AI layer constrained to validated tool outputs.
 
-## Vercel deployment
+## Vercel frontend and separately hosted backend
 
-This repository includes a Vercel configuration for the Vite frontend and Express API:
+Vercel should host the Vite frontend. Host the Express backend as a long-running Node service on Render, Railway, Fly.io, or another Node host. The frontend and backend use the same PostgreSQL `DATABASE_URL`, so all customer, marketplace, admin, and order data remains shared.
 
-1. Import the repository into Vercel with the repository root as the project root. In Vercel, set **Root Directory** to `.` (not `apps/web` or `apps/backend`).
-2. Set the build command to `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged). This command only builds the application.
-3. Keep the output directory as `apps/web/dist`.
-4. Add these environment variables in the Vercel project settings:
-   - `DATABASE_URL`
-   - `JWT_SECRET`
-   - `SSLCOMMERZ_STORE_ID`
-   - `SSLCOMMERZ_STORE_PASSWORD`
-   - `SSLCOMMERZ_IS_SANDBOX`
-   - `APP_URL` using the deployed HTTPS URL, without a trailing slash
-5. Leave `VITE_API_URL` empty for a single-project deployment. The frontend then calls the same deployment through `/api/v1`.
-6. Verify the deployed backend before testing signup by opening `/api/health`. It must return `"database":"connected"`.
+### Backend host
 
-The Express API is exposed through the serverless catch-all function in `api/[...path].ts`. Do not commit `.env`; use Vercel environment variables for production secrets.
+Create a Node service from the repository root with:
+
+```text
+Build command: npm install && npm run build --workspace apps/backend
+Start command: npm run start --workspace apps/backend
+```
+
+Set these backend environment variables:
+
+```text
+NODE_ENV=production
+DATABASE_URL=<the same hosted PostgreSQL URL used for seeding>
+JWT_SECRET=<long random secret>
+FRONTEND_URL=https://your-frontend.vercel.app
+PUBLIC_API_URL=https://your-backend.example.com
+CORS_ORIGINS=https://your-frontend.vercel.app
+SSLCOMMERZ_STORE_ID=<optional>
+SSLCOMMERZ_STORE_PASSWORD=<optional>
+SSLCOMMERZ_IS_SANDBOX=true
+```
+
+Verify it at `https://your-backend.example.com/health`. It must return `"database":"connected"`.
+
+### Vercel frontend
+
+1. Import the repository into Vercel with **Root Directory** set to `.`.
+2. Use `npm run vercel-build` as the build command.
+3. Use `apps/web/dist` as the output directory.
+4. Set the Vercel environment variable below, then redeploy:
+
+```text
+VITE_API_URL=https://your-backend.example.com
+```
+
+The frontend requests `https://your-backend.example.com/api/v1/...` automatically. Do not set this to `localhost`, and do not add `/api/v1` twice.
+
+Do not commit `.env`; use the hosting provider environment variables for production secrets.
 
 Run database setup separately from a trusted environment with network access to PostgreSQL:
 

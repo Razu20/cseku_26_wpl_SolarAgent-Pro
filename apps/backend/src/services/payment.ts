@@ -25,9 +25,10 @@ export async function initializeSslCommerzPayment(input: SslcommerzInitInput): P
   const storeId = process.env.SSLCOMMERZ_STORE_ID || 'solaragent_sandbox';
   const storePasswd = process.env.SSLCOMMERZ_STORE_PASSWORD || 'solaragent_passwd';
   const isSandbox = process.env.SSLCOMMERZ_IS_SANDBOX !== 'false';
-  const appUrl = (process.env.APP_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173')).replace(/\/+$/, '');
-  if (!appUrl) {
-    throw new Error('app_url_missing');
+  const apiUrl = (process.env.PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000')).replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173')).replace(/\/+$/, '');
+  if (!apiUrl || !frontendUrl) {
+    throw new Error('public_urls_missing');
   }
 
   if (process.env.NODE_ENV === 'production' && (!process.env.SSLCOMMERZ_STORE_ID || !process.env.SSLCOMMERZ_STORE_PASSWORD)) {
@@ -68,10 +69,10 @@ export async function initializeSslCommerzPayment(input: SslcommerzInitInput): P
       formParams.append('total_amount', String(input.totalAmount));
       formParams.append('currency', 'BDT');
       formParams.append('tran_id', transactionId);
-      formParams.append('success_url', `${appUrl}/api/v1/payments/sslcommerz/success`);
-      formParams.append('fail_url', `${appUrl}/api/v1/payments/sslcommerz/fail`);
-      formParams.append('cancel_url', `${appUrl}/api/v1/payments/sslcommerz/cancel`);
-      formParams.append('ipn_url', `${appUrl}/api/v1/payments/sslcommerz/ipn`);
+      formParams.append('success_url', `${apiUrl}/api/v1/payments/sslcommerz/success`);
+      formParams.append('fail_url', `${apiUrl}/api/v1/payments/sslcommerz/fail`);
+      formParams.append('cancel_url', `${apiUrl}/api/v1/payments/sslcommerz/cancel`);
+      formParams.append('ipn_url', `${apiUrl}/api/v1/payments/sslcommerz/ipn`);
       formParams.append('cus_name', input.customerName);
       formParams.append('cus_email', input.customerEmail || 'customer@solaragent.com.bd');
       formParams.append('cus_add1', input.customerAddress || 'Dhaka');
@@ -110,7 +111,7 @@ export async function initializeSslCommerzPayment(input: SslcommerzInitInput): P
   }
 
   // Deterministic Sandbox Gateway URL / Simulator for local development.
-  const sandboxGatewayUrl = `${appUrl}/api/v1/payments/sslcommerz/simulator?tran_id=${transactionId}&amount=${input.totalAmount}&order_id=${input.orderId}&return_url=${encodeURIComponent(`${appUrl}/customer?payment=success&tran_id=${transactionId}`)}`;
+  const sandboxGatewayUrl = `${apiUrl}/api/v1/payments/sslcommerz/simulator?tran_id=${transactionId}&amount=${input.totalAmount}&order_id=${input.orderId}&return_url=${encodeURIComponent(`${frontendUrl}/customer?payment=success&tran_id=${transactionId}`)}`;
 
   return {
     gatewayUrl: sandboxGatewayUrl,

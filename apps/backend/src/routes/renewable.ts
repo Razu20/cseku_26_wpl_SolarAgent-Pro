@@ -343,18 +343,34 @@ renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
 
   try {
     const requestUserId = parsed.data.userId || req.user?.id;
-
-    // 1. Run full engineering calculation
-    const estimate = await calculateRenewableProject({
+    const calculationInput = {
       type: parsed.data.type,
       location: parsed.data.location,
-      configuration: parsed.data.configuration,
-      appliances: parsed.data.appliances,
+      configuration: {
+        system: parsed.data.configuration.system,
+        locationType: parsed.data.configuration.locationType,
+        rooftopType: parsed.data.configuration.rooftopType,
+        rooftopAreaSqFt: parsed.data.configuration.rooftopAreaSqFt,
+        towerHeightM: parsed.data.configuration.towerHeightM,
+        terrainType: parsed.data.configuration.terrainType,
+      },
+      appliances: parsed.data.appliances.map((appliance) => ({
+        applianceId: appliance.applianceId,
+        name: appliance.name,
+        category: appliance.category,
+        ratedPowerW: appliance.ratedPowerW,
+        surgePowerW: appliance.surgePowerW,
+        quantity: appliance.quantity,
+        dailyHours: appliance.dailyHours,
+      })),
       selectedPanelId: parsed.data.selectedPanelId,
       selectedInverterId: parsed.data.selectedInverterId,
       selectedBatteryId: parsed.data.selectedBatteryId,
       selectedTurbineId: parsed.data.selectedTurbineId,
-    });
+    };
+
+    // 1. Run full engineering calculation
+    const estimate = await calculateRenewableProject(calculationInput);
 
     // 2. Save projectRequest
     const [request] = await db.insert(projectRequests).values({

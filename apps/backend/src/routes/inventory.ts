@@ -35,7 +35,16 @@ inventoryRoutes.post('/warehouses', async (req, res) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const [created] = await db.insert(warehouses).values(parsed.data).returning();
+    const [created] = await db.insert(warehouses).values({
+      name: parsed.data.name,
+      code: parsed.data.code,
+      division: parsed.data.division,
+      district: parsed.data.district,
+      address: parsed.data.address,
+      capacitySqft: parsed.data.capacitySqft,
+      managerName: parsed.data.managerName,
+      managerPhone: parsed.data.managerPhone,
+    }).returning();
     return res.status(201).json({ warehouse: created });
   } catch (err) {
     return res.status(500).json({ error: (err as Error).message });
