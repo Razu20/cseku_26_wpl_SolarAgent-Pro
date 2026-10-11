@@ -1,5 +1,8 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL;
-const API_BASE = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1')).replace(/\/+$/, '');
+const isLocalApiUrl = configuredApiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredApiUrl);
+const API_BASE = (configuredApiUrl && !(import.meta.env.PROD && isLocalApiUrl)
+  ? configuredApiUrl
+  : (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1')).replace(/\/+$/, '');
 
 type ApiOptions = {
   method?: string;
@@ -9,14 +12,19 @@ type ApiOptions = {
 
 export async function api<T>(path: string, options?: ApiOptions): Promise<T> {
   const token = localStorage.getItem('solaragent.token');
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers || {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options?.headers || {}),
+      },
+    });
+  } catch {
+    throw new Error('Unable to reach the SolarAgent API. Check the deployed /api route and database configuration.');
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;

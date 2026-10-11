@@ -43,6 +43,15 @@ app.get('/health', async (_req, res) => {
     res.status(503).json({ ok: false, service: 'solaragent-backend', database: 'unavailable' });
   }
 });
+app.get('/api/health', async (_req, res) => {
+  try {
+    await db.execute(sql`select 1`);
+    res.json({ ok: true, service: 'solaragent-backend', database: 'connected' });
+  } catch (error) {
+    console.error('Health check database failure:', error);
+    res.status(503).json({ ok: false, service: 'solaragent-backend', database: 'unavailable' });
+  }
+});
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', adminRoutes);

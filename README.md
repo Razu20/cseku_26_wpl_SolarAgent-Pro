@@ -2006,6 +2006,7 @@ This repository includes a Vercel configuration for the Vite frontend and Expres
    - `SSLCOMMERZ_IS_SANDBOX`
    - `APP_URL` using the deployed HTTPS URL, without a trailing slash
 5. Leave `VITE_API_URL` empty for a single-project deployment. The frontend then calls the same deployment through `/api/v1`.
+6. Verify the deployed backend before testing signup by opening `/api/health`. It must return `"database":"connected"`.
 
 The Express API is exposed through the serverless catch-all function in `api/[...path].ts`. Do not commit `.env`; use Vercel environment variables for production secrets.
 
