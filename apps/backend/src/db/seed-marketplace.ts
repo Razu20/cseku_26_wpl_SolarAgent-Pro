@@ -181,7 +181,19 @@ export async function seedMarketplace() {
   ];
 
   for (const c of companyData) {
-    await db.insert(companies).values(c).onConflictDoNothing();
+    await db.insert(companies).values(c).onConflictDoUpdate({
+      target: companies.id,
+      set: {
+        name: c.name,
+        logo: c.logo,
+        description: c.description,
+        website: c.website,
+        country: c.country,
+        contactInformation: c.contactInformation,
+        status: c.status,
+        updatedAt: new Date(),
+      },
+    });
   }
 
   // 2. Categories
@@ -252,7 +264,18 @@ export async function seedMarketplace() {
   ];
 
   for (const cat of categoryData) {
-    await db.insert(categories).values(cat).onConflictDoNothing();
+    await db.insert(categories).values(cat).onConflictDoUpdate({
+      target: categories.id,
+      set: {
+        name: cat.name,
+        slug: cat.slug,
+        description: cat.description,
+        icon: cat.icon,
+        image: cat.image,
+        status: cat.status,
+        updatedAt: new Date(),
+      },
+    });
   }
 
   // 3. Products
@@ -960,7 +983,14 @@ export async function seedMarketplace() {
     });
   }
 
-  console.log('Seeding Marketplace complete! Inserted companies, categories, and products.');
+  const [companyCount, categoryCount, productCount] = await Promise.all([
+    db.select({ id: companies.id }).from(companies),
+    db.select({ id: categories.id }).from(categories),
+    db.select({ id: productCatalog.id }).from(productCatalog),
+  ]);
+  console.log(
+    `Seeding Marketplace complete! Companies: ${companyCount.length}, categories: ${categoryCount.length}, products: ${productCount.length}.`
+  );
 }
 
 if (process.argv[1]?.endsWith('seed-marketplace.ts')) {
