@@ -1996,7 +1996,7 @@ The current Week 1 foundation establishes the requirements, architecture, reposi
 This repository includes a Vercel configuration for the Vite frontend and Express API:
 
 1. Import the repository into Vercel with the repository root as the project root.
-2. Keep the build command as `npm run build --workspace @solaragent/web`.
+2. Keep the build command as `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged).
 3. Keep the output directory as `apps/web/dist`.
 4. Add these environment variables in the Vercel project settings:
    - `DATABASE_URL`
@@ -2004,7 +2004,9 @@ This repository includes a Vercel configuration for the Vite frontend and Expres
    - `SSLCOMMERZ_STORE_ID`
    - `SSLCOMMERZ_STORE_PASSWORD`
    - `SSLCOMMERZ_IS_SANDBOX`
-   - `BACKEND_URL` and `FRONTEND_URL` using the deployed HTTPS URL
+   - `APP_URL` using the deployed HTTPS URL, without a trailing slash
 5. Leave `VITE_API_URL` empty for a single-project deployment. The frontend then calls the same deployment through `/api/v1`.
 
 The Express API is exposed through the serverless catch-all function in `api/[...path].ts`. Do not commit `.env`; use Vercel environment variables for production secrets.
+
+Do not run migrations or seed scripts in the Vercel build command. Vercel can build concurrently or rebuild on every deployment, which would make schema changes and seed inserts unsafe. Run `npm run db:setup` once from a trusted environment after setting `DATABASE_URL`, then use `npm run vercel-build` for deployments.
