@@ -95,7 +95,7 @@ Ensure that energy, system sizing, component, cost, and payback results originat
 
 ## O3 - Rapid Deployment
 
-Provide a full-stack reference implementation using Express, TypeScript, React, and Vite that can be run locally with a relatively small setup process.
+Provide a full-stack reference implementation using Next.js, TypeScript, React, and REST API route handlers that can be run locally with a relatively small setup process.
 
 ## O4 - Rigorous Documentation
 
@@ -271,7 +271,7 @@ The frontend can accept a roof photograph as additional visual context for the c
 File:
 
 ```text
-apps/backend/src/services/engineering.ts
+src/services/engineering.ts
 ```
 
 The Site Analysis Engine evaluates the suitability of the proposed location for solar deployment.
@@ -312,7 +312,7 @@ The exact production values and formulas should be taken from the implementation
 File:
 
 ```text
-apps/backend/src/services/engineering.ts
+src/services/engineering.ts
 ```
 
 The Energy Engine converts an appliance inventory into an estimated electrical demand profile.
@@ -416,7 +416,7 @@ Additional conversion losses and design margins should be applied according to t
 File:
 
 ```text
-apps/backend/src/services/engineering.ts
+src/services/engineering.ts
 ```
 
 The Component Engine generates a Bill of Materials (BOM).
@@ -465,7 +465,7 @@ BOS
 File:
 
 ```text
-apps/backend/src/services/engineering.ts
+src/services/engineering.ts
 ```
 
 The Cost Engine estimates:
@@ -497,7 +497,7 @@ The actual implementation should be treated as the authoritative source for all 
 File:
 
 ```text
-apps/backend/src/services/engineering.ts
+src/services/engineering.ts
 ```
 
 The Roadmap Engine transforms the design into an implementation-oriented plan.
@@ -536,8 +536,8 @@ Phase 7 — Monitoring & Maintenance
 Files:
 
 ```text
-apps/backend/src/routes/recommendations.ts
-apps/backend/src/services/engineering.ts
+src/routes/recommendations.ts
+src/services/engineering.ts
 ```
 
 The conversational agent uses the Anthropic Claude Messages API.
@@ -994,7 +994,6 @@ npm
 
 ```bash
 npm install
-npm run dev --workspace apps/backend
 ```
 
 The backend is available at:
@@ -1020,7 +1019,7 @@ Run:
 
 ```bash
 npm install
-npm run dev --workspace apps/web
+npm run dev
 ```
 
 The development frontend is available at:
@@ -1454,8 +1453,8 @@ fix/tariff-rounding
 The repository currently contains a working TypeScript full-stack baseline. The implementation is organized as an npm workspace:
 
 ```text
-apps/backend   Express API, Zod validation, engineering services, CRUD store, Drizzle schema
-apps/web       Vite + React application with routed operational pages
+src API route handlers, Zod validation, engineering services, CRUD store, Drizzle schema
+app and src frontend with routed operational pages
 docs           Implementation traceability and project documentation
 ```
 
@@ -1510,7 +1509,7 @@ npm run seed:marketplace # seed marketplace companies, categories, products, and
 The generated migrations are located at:
 
 ```text
-apps/backend/drizzle/
+drizzle/
 ```
 
 The migration can be generated without a database. Applying it requires a reachable PostgreSQL/PostGIS instance configured through `DATABASE_URL`. Admin utility/product CRUD and customer lead CRUD now use PostgreSQL through Drizzle; some legacy domains still use the in-memory store.
@@ -1868,13 +1867,12 @@ while maintaining the fundamental requirement that numeric engineering outputs a
 cd backend
 python -m venv venv
 pip install -r requirements.txt
-npm run dev --workspace apps/backend
 ```
 
 ## Frontend
 
 ```bash
-npm run dev --workspace apps/web
+npm run dev
 ```
 
 ## URLs
@@ -1991,66 +1989,9 @@ Agentic Software Development
 
 The current Week 1 foundation establishes the requirements, architecture, repository organization, calculation-engine structure, AI-agent layer, and development methodology. Subsequent development should implement and validate the planned functionality while keeping the engineering calculations auditable and the AI layer constrained to validated tool outputs.
 
-## Vercel frontend and separately hosted backend
+## Vercel deployment
 
-Vercel should host the Vite frontend. Host the Express backend as a long-running Node service on Render, Railway, Fly.io, or another Node host. The frontend and backend use the same PostgreSQL `DATABASE_URL`, so all customer, marketplace, admin, and order data remains shared.
-
-### Backend host
-
-For a separate Vercel backend project, set **Root Directory** to `apps/backend` and use:
-
-```text
-Build command: npm run vercel-build
-```
-
-The backend is exposed at `https://your-backend.vercel.app/api/v1/...` and its health endpoint is `https://your-backend.vercel.app/api/health`.
-
-For Render, Railway, Fly.io, or another long-running Node host, use the repository root and:
-
-```text
-Build command: npm install && npm run build --workspace apps/backend
-Start command: npm run start --workspace apps/backend
-```
-
-Set these backend environment variables:
-
-```text
-NODE_ENV=production
-DATABASE_URL=<the same hosted PostgreSQL URL used for seeding>
-JWT_SECRET=<long random secret>
-FRONTEND_URL=https://your-frontend.vercel.app
-PUBLIC_API_URL=https://your-backend.example.com
-CORS_ORIGINS=https://your-frontend.vercel.app
-SSLCOMMERZ_STORE_ID=<optional>
-SSLCOMMERZ_STORE_PASSWORD=<optional>
-SSLCOMMERZ_IS_SANDBOX=true
-```
-
-Verify it at `https://your-backend.example.com/api/health`. It must return `"database":"connected"`.
-
-### Vercel frontend
-
-1. Import the repository into Vercel with **Root Directory** set to `.`.
-2. Use `npm run vercel-build` as the build command.
-3. Use `apps/web/dist` as the output directory.
-4. Set the Vercel environment variable below in the **Production** environment, then redeploy. A local `.env` file is not used by an already-created Vercel deployment:
-
-```text
-VITE_API_URL=https://your-backend.vercel.app
-```
-
-The frontend requests `https://your-backend.vercel.app/api/v1/...` automatically. Do not set this to `localhost`, and do not add `/api/v1` twice.
-
-In the separate backend Vercel project, set `FRONTEND_URL` and `CORS_ORIGINS` to the exact frontend deployment origin, without a trailing slash:
-
-```text
-FRONTEND_URL=https://your-frontend.vercel.app
-CORS_ORIGINS=https://your-frontend.vercel.app
-```
-
-Changing `VITE_API_URL` requires a new frontend deployment because Vite embeds `VITE_*` values into the generated JavaScript.
-
-This repository also includes `apps/web/.env.production` with the public backend URL as a safe fallback. If the frontend Vercel project has `VITE_API_URL` configured, that value takes precedence. Redeploy the frontend after changing either value.
+Vercel hosts the complete root Next.js application. The UI and backend API handlers are deployed together; there is no separate Vite frontend, Express backend, backend host, or CORS configuration.
 
 Do not commit `.env`; use the hosting provider environment variables for production secrets.
 
@@ -2061,3 +2002,15 @@ npm run db:setup
 ```
 
 Do not add migrations or seed scripts to the Vercel build command. Vercel deployments can run repeatedly, and a database connection failure must not prevent the frontend/serverless bundle from being built. Make sure `DATABASE_URL` is configured in the environment where `npm run db:setup` is executed.
+
+## Deployment (single Next.js project)
+
+This repository is one root Next.js application. API handlers are served from the same deployment under `/api/v1` (and `/api/health`); no separate Express server or CORS configuration is required. Set `DATABASE_URL` and `JWT_SECRET`, then deploy the repository root with `npm install && npm run build`. The browser API client uses same-origin `/api/v1`.
+
+### Local development
+
+```bash
+npm install
+npm run dev
+```
+

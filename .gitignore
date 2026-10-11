@@ -5,6 +5,4 @@ node_modules
 .DS_Store
 dist
 coverage
-apps/backend/drizzle
-apps/backend/.env
-apps/web/dist
+.next
