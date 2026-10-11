@@ -1996,7 +1996,7 @@ The current Week 1 foundation establishes the requirements, architecture, reposi
 This repository includes a Vercel configuration for the Vite frontend and Express API:
 
 1. Import the repository into Vercel with the repository root as the project root. In Vercel, set **Root Directory** to `.` (not `apps/web` or `apps/backend`).
-2. Set the build command to `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged). This command builds the application, applies migrations, and runs the idempotent seed.
+2. Set the build command to `npm run vercel-build` (or leave the repository `vercel.json` setting unchanged). This command only builds the application.
 3. Keep the output directory as `apps/web/dist`.
 4. Add these environment variables in the Vercel project settings:
    - `DATABASE_URL`
@@ -2009,4 +2009,10 @@ This repository includes a Vercel configuration for the Vite frontend and Expres
 
 The Express API is exposed through the serverless catch-all function in `api/[...path].ts`. Do not commit `.env`; use Vercel environment variables for production secrets.
 
-The Vercel build command runs `npm run db:setup` after the build. Drizzle tracks applied migrations and the seed uses conflict-safe inserts, so it can be rerun for deployments. Make sure `DATABASE_URL` is configured in Vercel before deploying.
+Run database setup separately from a trusted environment with network access to PostgreSQL:
+
+```bash
+npm run db:setup
+```
+
+Do not add migrations or seed scripts to the Vercel build command. Vercel deployments can run repeatedly, and a database connection failure must not prevent the frontend/serverless bundle from being built. Make sure `DATABASE_URL` is configured in the environment where `npm run db:setup` is executed.
