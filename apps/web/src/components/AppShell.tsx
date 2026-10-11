@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 const adminLinks = [
   ['Control Dashboard', '/admin/dashboard'],
@@ -9,12 +9,16 @@ const adminLinks = [
   ['Technician Types', '/admin/technician-types'],
   ['Technician Payments', '/admin/technician-payments'],
   ['Appliance & Load', '/admin/appliances'],
-  ['Solar Panels & Hardware', '/admin/products'],
+  ['Products & Equipment', '/admin/products'],
+  ['Companies & Brands', '/admin/companies'],
+  ['Product Categories', '/admin/categories'],
   ['Solar Packages', '/admin/packages'],
   ['Control & Pricing', '/admin/control'],
+  ['View Marketplace Shop', '/'],
 ];
 
 const customerLinks = [
+  ['Marketplace Shop', '/'],
   ['My solar journey', '/customer'],
   ['Recommendations', '/recommendations'],
   ['System monitoring', '/monitoring'],
@@ -53,4 +57,9 @@ export function AppShell() {
       </section>
     </div>
   );
+}
+
+export function ProtectedRoute() {
+  const token = localStorage.getItem('solaragent.token');
+  return token ? <AppShell /> : <Navigate to="/login" replace />;
 }

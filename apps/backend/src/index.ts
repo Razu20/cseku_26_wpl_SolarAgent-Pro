@@ -17,6 +17,10 @@ import { adminRoutes } from './routes/admin.js';
 import { renewableRoutes } from './routes/renewable.js';
 import { paymentRoutes } from './routes/payment.js';
 import { chatRoutes } from './routes/chat.js';
+import { inventoryRoutes } from './routes/inventory.js';
+import { supplierRoutes } from './routes/suppliers.js';
+import { technicianRoutes } from './routes/technicians.js';
+import { notificationRoutes } from './routes/notifications.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -33,6 +37,10 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', adminRoutes);
+app.use('/api/v1', inventoryRoutes);
+app.use('/api/v1', supplierRoutes);
+app.use('/api/v1', technicianRoutes);
+app.use('/api/v1', notificationRoutes);
 app.use('/api/v1/leads', leadRoutes);
 app.use('/api/v1/sites', siteRoutes);
 app.use('/api/v1/recommendations', recommendationRoutes);
@@ -44,10 +52,20 @@ app.use('/api/v1/tickets', ticketRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1', domainRoutes);
 app.use('/api/v1/surveys', surveyRoutes);
-app.use('/api/v1', procurementRoutes);
+app.use('/api/v1', renewableRoutes);
 app.use('/api/v1/renewable', renewableRoutes);
+app.use('/api/v1', procurementRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/chat', chatRoutes);
+
+// Compatibility aliases for /api without /v1
+app.use('/api', renewableRoutes);
+app.use('/api', adminRoutes);
+app.use('/api', inventoryRoutes);
+app.use('/api', supplierRoutes);
+app.use('/api', technicianRoutes);
+app.use('/api', notificationRoutes);
+app.use('/api/renewable', renewableRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'route_not_found' });

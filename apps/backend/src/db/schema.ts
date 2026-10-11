@@ -23,7 +23,7 @@ export const requirementSourceEnum = pgEnum('requirement_source', [
 
 export const productStatusEnum = pgEnum('product_status', ['preferred', 'approved', 'conditional', 'blocked']);
 
-export const userRoleEnum = pgEnum('user_role', ['admin', 'customer']);
+export const userRoleEnum = pgEnum('user_role', ['admin', 'customer', 'technician', 'supplier']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -108,25 +108,69 @@ export const engineeringResults = pgTable('engineering_results', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const companies = pgTable('companies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  logo: text('logo'),
+  description: text('description'),
+  website: text('website'),
+  country: text('country'),
+  contactInformation: text('contact_information'),
+  status: text('status').notNull().default('active'),
+  leadTimeDays: integer('lead_time_days').default(7),
+  minOrderQuantity: integer('min_order_quantity').default(5),
+  categoriesSupplied: jsonb('categories_supplied').default(['Solar Panel', 'Inverter']),
+  rating: numeric('rating', { precision: 3, scale: 2 }).default('4.90'),
+  verified: boolean('verified').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const categories = pgTable('categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  icon: text('icon'),
+  image: text('image'),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
 export const productCatalog = pgTable('product_catalog', {
   id: uuid('id').primaryKey().defaultRandom(),
   sku: text('sku').notNull(),
   name: text('name').notNull(),
   brand: text('brand'),
+  company: text('company'),
+  companyId: uuid('company_id').references(() => companies.id),
   model: text('model'),
   category: text('category').notNull(),
+  categoryId: uuid('category_id').references(() => categories.id),
   wattage: integer('wattage'),
+  capacity: numeric('capacity', { precision: 10, scale: 2 }),
+  capacityUnit: text('capacity_unit').default('W'),
   dimensions: text('dimensions'),
   efficiency: numeric('efficiency', { precision: 5, scale: 2 }),
   warranty: text('warranty'),
   description: text('description'),
+  image: text('image'),
+  galleryImages: jsonb('gallery_images').default([]),
   stock: integer('stock').default(100),
+  availability: text('availability').notNull().default('in_stock'),
+  featured: boolean('featured').notNull().default(false),
+  currency: text('currency').notNull().default('BDT'),
+  unit: text('unit').notNull().default('piece'),
   specifications: jsonb('specifications').default({}),
   status: productStatusEnum('status').notNull().default('approved'),
   regularPrice: numeric('regular_price', { precision: 12, scale: 2 }).notNull(),
+  discountPrice: numeric('discount_price', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
+export const products = productCatalog;
 
 export const quotes = pgTable('quotes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -186,12 +230,20 @@ export const utilities = pgTable('utilities', {
 
 export const inventoryItems = pgTable('inventory_items', {
   id: uuid('id').primaryKey().defaultRandom(),
+  productId: uuid('product_id').references(() => productCatalog.id),
+  warehouseId: uuid('warehouse_id'),
+  supplierId: uuid('supplier_id').references(() => companies.id),
   sku: text('sku').notNull(),
   name: text('name').notNull(),
   category: text('category').notNull(),
   quantity: integer('quantity').notNull().default(0),
+  reservedQuantity: integer('reserved_quantity').notNull().default(0),
+  availableQuantity: integer('available_quantity').notNull().default(0),
+  damagedQuantity: integer('damaged_quantity').notNull().default(0),
+  minThreshold: integer('min_threshold').notNull().default(10),
+  unitCost: numeric('unit_cost', { precision: 12, scale: 2 }).default('0'),
   status: text('status').notNull().default('available'),
-  warehouse: text('warehouse').notNull(),
+  warehouse: text('warehouse').notNull().default('Central Warehouse Dhaka'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -263,6 +315,15 @@ export const projectRequestAppliances = pgTable('project_request_appliances', {
   dailyHours: numeric('daily_hours', { precision: 5, scale: 2 }).notNull(),
 });
 
+export const projectProducts = pgTable('project_products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projectRequests.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').references(() => productCatalog.id, { onDelete: 'cascade' }),
+  quantity: integer('quantity').notNull().default(1),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 export const technicianTypes = pgTable('technician_types', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -275,13 +336,25 @@ export const technicianTypes = pgTable('technician_types', {
 
 export const technicians = pgTable('technicians', {
   id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id),
   name: text('name').notNull(),
   contactNumber: text('contact_number').notNull(),
   email: text('email').notNull(),
   address: text('address'),
+  division: text('division').default('Dhaka'),
+  district: text('district').default('Dhaka'),
+  upazila: text('upazila').default('Gulshan'),
+  village: text('village').default('Gulshan-2'),
   technicianTypeId: uuid('technician_type_id').references(() => technicianTypes.id),
   skills: jsonb('skills').default([]),
   experienceYears: integer('experience_years').default(1),
+  solarExperienceYears: integer('solar_experience_years').default(3),
+  windExperienceYears: integer('wind_experience_years').default(1),
+  hybridExperienceYears: integer('hybrid_experience_years').default(2),
+  certifications: jsonb('certifications').default([]),
+  rating: numeric('rating', { precision: 3, scale: 2 }).default('4.85'),
+  completedJobs: integer('completed_jobs').default(0),
+  activeJobs: integer('active_jobs').default(0),
   availability: text('availability').notNull().default('available'),
   serviceArea: text('service_area').notNull().default('Dhaka'),
   paymentInfo: jsonb('payment_info').default({}),
@@ -294,13 +367,18 @@ export const packages = pgTable('packages', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   description: text('description').notNull(),
+  packageType: text('package_type').default('solar'),
   systemType: text('system_type').notNull().default('on-grid'),
   capacityKwp: numeric('capacity_kwp', { precision: 6, scale: 2 }).notNull(),
   panelProductId: uuid('panel_product_id').references(() => productCatalog.id),
-  panelQuantity: integer('panel_quantity').notNull(),
+  panelQuantity: integer('panel_quantity').notNull().default(0),
+  turbineProductId: uuid('turbine_product_id').references(() => productCatalog.id),
+  turbineQuantity: integer('turbine_quantity').default(0),
   inverterProductId: uuid('inverter_product_id').references(() => productCatalog.id),
   batteryProductId: uuid('battery_product_id').references(() => productCatalog.id),
+  batteryQuantity: integer('battery_quantity').default(1),
   mountingProductId: uuid('mounting_product_id').references(() => productCatalog.id),
+  componentBreakdown: jsonb('component_breakdown').default([]),
   installationPrice: numeric('installation_price', { precision: 12, scale: 2 }).notNull().default('0'),
   warranty: text('warranty').notNull().default('5 years system / 25 years panel performance'),
   totalPrice: numeric('total_price', { precision: 12, scale: 2 }).notNull(),
@@ -335,7 +413,12 @@ export const orders = pgTable('orders', {
   paymentTransactionId: text('payment_transaction_id'),
   technicianId: uuid('technician_id').references(() => technicians.id),
   scheduledDate: text('scheduled_date'),
+  scheduledSlot: text('scheduled_slot').default('full_day'),
+  installationStatus: text('installation_status').default('pending'),
   notes: text('notes'),
+  cancellationReason: text('cancellation_reason'),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  cancelledBy: text('cancelled_by'),
   emailSent: boolean('email_sent').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -392,4 +475,74 @@ export const supportTickets = pgTable('support_tickets', {
   messages: jsonb('messages').default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const warehouses = pgTable('warehouses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  code: text('code').notNull().unique(),
+  division: text('division').notNull(),
+  district: text('district').notNull(),
+  address: text('address').notNull(),
+  capacitySqft: integer('capacity_sqft').default(5000),
+  managerName: text('manager_name'),
+  managerPhone: text('manager_phone'),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const stockMovements = pgTable('stock_movements', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  inventoryItemId: uuid('inventory_item_id').references(() => inventoryItems.id),
+  productId: uuid('product_id').notNull().references(() => productCatalog.id),
+  warehouseId: uuid('warehouse_id').references(() => warehouses.id),
+  type: text('type').notNull(),
+  quantity: integer('quantity').notNull(),
+  previousStock: integer('previous_stock').notNull().default(0),
+  newStock: integer('new_stock').notNull().default(0),
+  referenceType: text('reference_type'),
+  referenceId: text('reference_id'),
+  notes: text('notes'),
+  actorName: text('actor_name').default('System'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const supplierPurchaseOrders = pgTable('supplier_purchase_orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  poNumber: text('po_number').notNull().unique(),
+  companyId: uuid('company_id').notNull().references(() => companies.id),
+  warehouseId: uuid('warehouse_id').references(() => warehouses.id),
+  status: text('status').notNull().default('pending'),
+  items: jsonb('items').notNull().default([]),
+  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  expectedDeliveryDate: timestamp('expected_delivery_date', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const technicianAssignments = pgTable('technician_assignments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  technicianId: uuid('technician_id').notNull().references(() => technicians.id),
+  orderId: uuid('order_id').notNull().references(() => orders.id),
+  scheduledDate: text('scheduled_date').notNull(),
+  scheduledSlot: text('scheduled_slot').notNull().default('full_day'),
+  status: text('status').notNull().default('assigned'),
+  conflictChecked: boolean('conflict_checked').default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id),
+  role: text('role'),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  type: text('type').notNull().default('info'),
+  link: text('link'),
+  isRead: boolean('is_read').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

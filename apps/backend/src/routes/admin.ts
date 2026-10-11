@@ -5,6 +5,8 @@ import { db } from '../db/client.js';
 import {
   adminSettings,
   appliances,
+  categories,
+  companies,
   orders,
   packages,
   productCatalog,
@@ -16,8 +18,11 @@ import {
   utilities,
 } from '../db/schema.js';
 import { hashPassword } from '../lib/password.js';
+import { requireAuth, requireRole } from './auth.js';
+import { canTransitionOrderStatus } from '../lib/orderLifecycle.js';
 
 export const adminRoutes = Router();
+adminRoutes.use('/admin', requireAuth, requireRole(['admin']));
 
 // ==========================================
 // 1. USER MANAGEMENT (Section 27)
@@ -230,6 +235,11 @@ adminRoutes.get('/admin/orders/:id', async (req, res) => {
 adminRoutes.patch('/admin/orders/:id', async (req, res) => {
   const { status, technicianId, scheduledDate, paymentStatus, notes } = req.body;
   try {
+    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, req.params.id));
+    if (!current) return res.status(404).json({ error: 'order_not_found' });
+    if (status && !canTransitionOrderStatus(current.status, status)) {
+      return res.status(409).json({ error: 'invalid_order_status_transition', from: current.status, to: status });
+    }
     const [updated] = await db
       .update(orders)
       .set({
@@ -595,29 +605,221 @@ adminRoutes.delete('/admin/appliances/:id', async (req, res) => {
 });
 
 // ==========================================
-// 7. PRODUCT CATALOG MANAGEMENT (Section 32, 33)
+// 6.5. ADMIN DASHBOARD OVERVIEW STATS (Section 22)
+// ==========================================
+adminRoutes.get('/admin/stats', async (_req, res) => {
+  try {
+    const [allProducts, allCompanies, allCategories, allUsers, allRequests, allOrders] = await Promise.all([
+      db.select().from(productCatalog),
+      db.select().from(companies),
+      db.select().from(categories),
+      db.select().from(users),
+      db.select().from(projectRequests),
+      db.select().from(orders),
+    ]);
+
+    return res.json({
+      totalProducts: allProducts.length,
+      totalCompanies: allCompanies.length,
+      totalCategories: allCategories.length,
+      activeProducts: allProducts.filter((p) => p.status === 'approved' || p.status === 'preferred').length,
+      outOfStockProducts: allProducts.filter((p) => (p.stock || 0) <= 0 || p.availability === 'out_of_stock').length,
+      totalUsers: allUsers.length,
+      totalProjects: allRequests.length + allOrders.length,
+      pendingRequests: allRequests.filter((r) => r.status === 'submitted' || r.status === 'draft').length,
+    });
+  } catch (error) {
+    return res.status(503).json({ error: 'database_unavailable' });
+  }
+});
+
+// ==========================================
+// 6.6. COMPANY / BRAND MANAGEMENT (Section 11)
+// ==========================================
+const adminCompanySchema = z.object({
+  name: z.string().min(1),
+  logo: z.string().optional(),
+  description: z.string().optional(),
+  website: z.string().optional(),
+  country: z.string().optional(),
+  contactInformation: z.string().optional(),
+  status: z.enum(['active', 'inactive']).default('active'),
+});
+
+adminRoutes.get('/admin/companies', async (_req, res) => {
+  try {
+    const [allCompanies, allProducts] = await Promise.all([
+      db.select().from(companies).orderBy(asc(companies.name)),
+      db.select().from(productCatalog),
+    ]);
+
+    const populated = allCompanies.map((c) => ({
+      ...c,
+      company_name: c.name,
+      productCount: allProducts.filter((p) => p.companyId === c.id || (p.company && p.company.toLowerCase() === c.name.toLowerCase())).length,
+    }));
+
+    return res.json({ companies: populated });
+  } catch (error) {
+    return res.status(503).json({ error: 'database_unavailable' });
+  }
+});
+
+adminRoutes.post('/admin/companies', async (req, res) => {
+  const parsed = adminCompanySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const [created] = await db.insert(companies).values(parsed.data).returning();
+    return res.status(201).json({ company: created });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+adminRoutes.patch('/admin/companies/:id', async (req, res) => {
+  const parsed = adminCompanySchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const [updated] = await db.update(companies).set({ ...parsed.data, updatedAt: new Date() }).where(eq(companies.id, req.params.id)).returning();
+    return updated ? res.json({ company: updated }) : res.status(404).json({ error: 'company_not_found' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+adminRoutes.delete('/admin/companies/:id', async (req, res) => {
+  try {
+    const [deleted] = await db.delete(companies).where(eq(companies.id, req.params.id)).returning();
+    return deleted ? res.status(204).send() : res.status(404).json({ error: 'company_not_found' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==========================================
+// 6.7. CATEGORY MANAGEMENT (Section 12)
+// ==========================================
+const adminCategorySchema = z.object({
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+  image: z.string().optional(),
+  status: z.enum(['active', 'inactive']).default('active'),
+});
+
+adminRoutes.get('/admin/categories', async (_req, res) => {
+  try {
+    const [allCategories, allProducts] = await Promise.all([
+      db.select().from(categories).orderBy(asc(categories.name)),
+      db.select().from(productCatalog),
+    ]);
+
+    const populated = allCategories.map((c) => ({
+      ...c,
+      productCount: allProducts.filter((p) => p.categoryId === c.id || (p.category && p.category.toLowerCase().includes(c.name.toLowerCase()))).length,
+    }));
+
+    return res.json({ categories: populated });
+  } catch (error) {
+    return res.status(503).json({ error: 'database_unavailable' });
+  }
+});
+
+adminRoutes.post('/admin/categories', async (req, res) => {
+  const parsed = adminCategorySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const [created] = await db.insert(categories).values(parsed.data).returning();
+    return res.status(201).json({ category: created });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+adminRoutes.patch('/admin/categories/:id', async (req, res) => {
+  const parsed = adminCategorySchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const [updated] = await db.update(categories).set({ ...parsed.data, updatedAt: new Date() }).where(eq(categories.id, req.params.id)).returning();
+    return updated ? res.json({ category: updated }) : res.status(404).json({ error: 'category_not_found' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+adminRoutes.delete('/admin/categories/:id', async (req, res) => {
+  try {
+    const [deleted] = await db.delete(categories).where(eq(categories.id, req.params.id)).returning();
+    return deleted ? res.status(204).send() : res.status(404).json({ error: 'category_not_found' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==========================================
+// 7. PRODUCT CATALOG MANAGEMENT (Section 10, 13, 14, 15)
 // ==========================================
 const adminProductSchema = z.object({
   sku: z.string().min(1),
   name: z.string().min(1),
   brand: z.string().optional(),
+  company: z.string().optional(),
+  companyId: z.string().uuid().optional().nullable(),
   model: z.string().optional(),
   category: z.string().min(1),
+  categoryId: z.string().uuid().optional().nullable(),
   wattage: z.number().int().nonnegative().optional(),
+  capacity: z.number().optional().nullable(),
+  capacityUnit: z.string().optional(),
   dimensions: z.string().optional(),
-  efficiency: z.number().optional(),
+  efficiency: z.number().optional().nullable(),
   warranty: z.string().optional(),
   description: z.string().optional(),
+  image: z.string().optional(),
+  galleryImages: z.array(z.string()).optional(),
   stock: z.number().int().nonnegative().default(100),
+  availability: z.enum(['in_stock', 'out_of_stock', 'pre_order', 'discontinued']).default('in_stock'),
+  featured: z.boolean().default(false),
+  currency: z.string().default('BDT'),
+  unit: z.string().default('piece'),
   specifications: z.record(z.any()).default({}),
   status: z.enum(['preferred', 'approved', 'conditional', 'blocked']).default('approved'),
   price: z.number().nonnegative(),
+  discountPrice: z.number().optional().nullable(),
 });
 
 adminRoutes.get('/admin/products', async (_req, res) => {
   try {
-    const rows = await db.select().from(productCatalog).orderBy(asc(productCatalog.category), asc(productCatalog.name));
-    return res.json({ products: rows.map((row) => ({ ...row, price: Number(row.regularPrice) })) });
+    const [rows, allCompanies, allCategories] = await Promise.all([
+      db.select().from(productCatalog).orderBy(asc(productCatalog.category), asc(productCatalog.name)),
+      db.select().from(companies),
+      db.select().from(categories),
+    ]);
+
+    const compMap = new Map(allCompanies.map((c) => [c.id, c]));
+    const catMap = new Map(allCategories.map((c) => [c.id, c]));
+
+    const populated = rows.map((row) => ({
+      ...row,
+      price: Number(row.regularPrice),
+      regularPrice: Number(row.regularPrice),
+      discountPrice: row.discountPrice ? Number(row.discountPrice) : null,
+      discount_price: row.discountPrice ? Number(row.discountPrice) : null,
+      capacity: row.capacity ? Number(row.capacity) : row.wattage || null,
+      company: compMap.get(row.companyId || '') || (row.company ? { name: row.company } : null),
+      company_name: compMap.get(row.companyId || '')?.name || row.company || row.brand || '',
+      categoryObj: catMap.get(row.categoryId || '') || null,
+      category_name: catMap.get(row.categoryId || '')?.name || row.category || '',
+      galleryImages: Array.isArray(row.galleryImages) ? row.galleryImages : [],
+      gallery_images: Array.isArray(row.galleryImages) ? row.galleryImages : [],
+    }));
+
+    return res.json({ products: populated });
   } catch (error) {
     return res.status(503).json({ error: 'database_unavailable' });
   }
@@ -632,19 +834,38 @@ adminRoutes.post('/admin/products', async (req, res) => {
       sku: parsed.data.sku,
       name: parsed.data.name,
       brand: parsed.data.brand,
+      company: parsed.data.company,
+      companyId: parsed.data.companyId || undefined,
       model: parsed.data.model,
       category: parsed.data.category,
+      categoryId: parsed.data.categoryId || undefined,
       wattage: parsed.data.wattage,
+      capacity: parsed.data.capacity !== undefined && parsed.data.capacity !== null ? String(parsed.data.capacity) : undefined,
+      capacityUnit: parsed.data.capacityUnit || 'W',
       dimensions: parsed.data.dimensions,
-      efficiency: parsed.data.efficiency !== undefined ? String(parsed.data.efficiency) : undefined,
+      efficiency: parsed.data.efficiency !== undefined && parsed.data.efficiency !== null ? String(parsed.data.efficiency) : undefined,
       warranty: parsed.data.warranty,
       description: parsed.data.description,
+      image: parsed.data.image,
+      galleryImages: parsed.data.galleryImages || [],
       stock: parsed.data.stock,
+      availability: parsed.data.availability,
+      featured: parsed.data.featured,
+      currency: parsed.data.currency || 'BDT',
+      unit: parsed.data.unit || 'piece',
       specifications: parsed.data.specifications,
       status: parsed.data.status,
       regularPrice: String(parsed.data.price),
+      discountPrice: parsed.data.discountPrice !== undefined && parsed.data.discountPrice !== null ? String(parsed.data.discountPrice) : undefined,
     }).returning();
-    return res.status(201).json({ product: { ...product, price: Number(product.regularPrice) } });
+
+    return res.status(201).json({
+      product: {
+        ...product,
+        price: Number(product.regularPrice),
+        discountPrice: product.discountPrice ? Number(product.discountPrice) : null,
+      },
+    });
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }
@@ -654,16 +875,26 @@ adminRoutes.patch('/admin/products/:id', async (req, res) => {
   const parsed = adminProductSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { price, efficiency, ...rest } = parsed.data;
+  const { price, discountPrice, capacity, efficiency, ...rest } = parsed.data;
   try {
     const [product] = await db.update(productCatalog).set({
       ...rest,
       ...(price !== undefined ? { regularPrice: String(price) } : {}),
-      ...(efficiency !== undefined ? { efficiency: String(efficiency) } : {}),
+      ...(discountPrice !== undefined ? { discountPrice: discountPrice !== null ? String(discountPrice) : null } : {}),
+      ...(capacity !== undefined ? { capacity: capacity !== null ? String(capacity) : null } : {}),
+      ...(efficiency !== undefined ? { efficiency: efficiency !== null ? String(efficiency) : null } : {}),
       updatedAt: new Date(),
     }).where(eq(productCatalog.id, req.params.id)).returning();
 
-    return product ? res.json({ product: { ...product, price: Number(product.regularPrice) } }) : res.status(404).json({ error: 'product_not_found' });
+    return product
+      ? res.json({
+          product: {
+            ...product,
+            price: Number(product.regularPrice),
+            discountPrice: product.discountPrice ? Number(product.discountPrice) : null,
+          },
+        })
+      : res.status(404).json({ error: 'product_not_found' });
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }

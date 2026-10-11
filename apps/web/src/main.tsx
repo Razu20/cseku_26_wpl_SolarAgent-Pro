@@ -16,16 +16,18 @@ import { AdminPanelPage } from './pages/AdminPanelPage';
 import { CustomerPanelPage } from './pages/CustomerPanelPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AuthPage } from './pages/AuthPage';
-import { AppShell } from './components/AppShell';
+import { ProductDetailsPage } from './pages/ProductDetailsPage';
+import { ProtectedRoute } from './components/AppShell';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/products/:id" element={<ProductDetailsPage />} />
         <Route path="/login" element={<AuthPage mode="login" />} />
         <Route path="/signup" element={<AuthPage mode="signup" />} />
-        <Route element={<AppShell />}>
+        <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
@@ -44,6 +46,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/admin/technician-payments" element={<AdminPanelPage section="tech_payments" />} />
           <Route path="/admin/appliances" element={<AdminPanelPage section="appliances" />} />
           <Route path="/admin/products" element={<AdminPanelPage section="products" />} />
+          <Route path="/admin/companies" element={<AdminPanelPage section="companies" />} />
+          <Route path="/admin/categories" element={<AdminPanelPage section="categories" />} />
           <Route path="/admin/packages" element={<AdminPanelPage section="packages" />} />
           <Route path="/admin/control" element={<AdminPanelPage section="settings" />} />
           <Route path="/customer" element={<CustomerPanelPage />} />

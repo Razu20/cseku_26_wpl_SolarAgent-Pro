@@ -1503,6 +1503,8 @@ npm run lint       # run ESLint
 npm run build      # build both applications
 npm run generate   # generate Drizzle SQL migration
 npm run migrate    # apply migration to DATABASE_URL
+npm run migrate:shop # apply the marketplace compatibility migration
+npm run seed:marketplace # seed marketplace companies, categories, products, and packages
 ```
 
 The generated migrations are located at:

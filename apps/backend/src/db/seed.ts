@@ -13,6 +13,7 @@ import {
   utilities,
 } from './schema.js';
 import { hashPassword } from '../lib/password.js';
+import { seedMarketplace } from './seed-marketplace.js';
 
 async function seed() {
   console.log('Seeding SolarAgent Pro database with initial dataset...');
@@ -608,6 +609,8 @@ async function seed() {
   for (const setting of defaultSettings) {
     await db.insert(adminSettings).values(setting).onConflictDoNothing();
   }
+
+  await seedMarketplace();
 
   console.log('✓ Database seeding completed successfully with all realistic Bangladesh data!');
 }

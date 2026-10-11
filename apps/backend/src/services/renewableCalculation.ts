@@ -95,13 +95,17 @@ export async function calculateRenewableProject(input: CalculationInput) {
 
   // 4. Products Catalog Lookup
   const catalog = await db.select().from(productCatalog).where(eq(productCatalog.status, 'approved')).orderBy(asc(productCatalog.name));
-  const preferredModules = await db.select().from(productCatalog).where(eq(productCatalog.category, 'module'));
-  const allModules = preferredModules.length > 0 ? preferredModules : catalog.filter((p) => p.category === 'module');
-  const allInverters = await db.select().from(productCatalog).where(eq(productCatalog.category, 'inverter'));
-  const allBatteries = await db.select().from(productCatalog).where(eq(productCatalog.category, 'battery'));
-  const allTurbines = await db.select().from(productCatalog).where(eq(productCatalog.category, 'turbine'));
-  const allMountings = await db.select().from(productCatalog).where(eq(productCatalog.category, 'mounting'));
-  const allElectrical = await db.select().from(productCatalog).where(eq(productCatalog.category, 'electrical'));
+  const isMatch = (cat: string | null | undefined, target: string) => {
+    const c = (cat || '').toLowerCase();
+    const t = target.toLowerCase();
+    return c === t || c.includes(t) || t.includes(c);
+  };
+  const allModules = catalog.filter((p) => isMatch(p.category, 'module') || isMatch(p.category, 'panel') || isMatch(p.category, 'solar'));
+  const allInverters = catalog.filter((p) => isMatch(p.category, 'inverter'));
+  const allBatteries = catalog.filter((p) => isMatch(p.category, 'battery'));
+  const allTurbines = catalog.filter((p) => isMatch(p.category, 'turbine') || isMatch(p.category, 'wind'));
+  const allMountings = catalog.filter((p) => isMatch(p.category, 'mounting') || isMatch(p.category, 'structure'));
+  const allElectrical = catalog.filter((p) => isMatch(p.category, 'electrical') || isMatch(p.category, 'controller') || isMatch(p.category, 'accessories'));
 
   // 5. Sizing based on Project Type
   let solarCapacityKwp = 0;

@@ -5,6 +5,8 @@ import { db } from '../db/client.js';
 import { orders, payments } from '../db/schema.js';
 import { initializeSslCommerzPayment, verifyServerSidePayment } from '../services/payment.js';
 import { sendOrderConfirmationEmail } from '../services/email.js';
+import { requireAuth, type AuthenticatedRequest } from './auth.js';
+import { canTransitionOrderStatus } from '../lib/orderLifecycle.js';
 
 export const paymentRoutes = Router();
 
@@ -14,13 +16,19 @@ const initPaymentSchema = z.object({
   userId: z.string().uuid().optional(),
 });
 
-paymentRoutes.post('/sslcommerz/init', async (req, res) => {
+paymentRoutes.post('/sslcommerz/init', requireAuth, async (req: AuthenticatedRequest, res) => {
   const parsed = initPaymentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, parsed.data.orderId));
     if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (req.user!.role !== 'admin' && order.userId !== req.user!.id) {
+      return res.status(403).json({ error: 'order_access_denied' });
+    }
+    if (!canTransitionOrderStatus(order.status, 'awaiting_payment')) {
+      return res.status(409).json({ error: 'invalid_order_status_transition', from: order.status, to: 'awaiting_payment' });
+    }
 
     if (order.paymentStatus === 'verified') {
       return res.status(400).json({ error: 'order_already_paid' });
@@ -46,6 +54,10 @@ paymentRoutes.post('/sslcommerz/init', async (req, res) => {
 
 // 2. SSLCommerz Sandbox / Simulator Gateway Page (HTML)
 paymentRoutes.get('/sslcommerz/simulator', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'route_not_found' });
+  }
+
   const { tran_id, amount, order_id, return_url } = req.query;
 
   const html = `
@@ -167,13 +179,16 @@ paymentRoutes.post('/sslcommerz/cancel', async (req, res) => {
 });
 
 // 6. COD (Cash on Delivery / On-Site) Order Confirmation
-paymentRoutes.post('/cod/confirm', async (req, res) => {
+paymentRoutes.post('/cod/confirm', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { orderId } = req.body;
   if (!orderId) return res.status(400).json({ error: 'order_id_required' });
 
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
     if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (req.user!.role !== 'admin' && order.userId !== req.user!.id) {
+      return res.status(403).json({ error: 'order_access_denied' });
+    }
 
     // COD is set to payment_pending_verification, never auto-paid
     await db.update(orders).set({

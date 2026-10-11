@@ -10,6 +10,8 @@ export type AdminSection =
   | 'tech_payments'
   | 'appliances'
   | 'products'
+  | 'companies'
+  | 'categories'
   | 'packages'
   | 'settings';
 
@@ -148,7 +150,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
   });
 
   // ==========================================
-  // 6. PRODUCTS STATE & MODALS (DIFFERENT COMPANIES)
+  // 6. PRODUCTS, COMPANIES & CATEGORIES STATE & MODALS
   // ==========================================
   const [products, setProducts] = useState<any[]>([]);
   const [productCompanyFilter, setProductCompanyFilter] = useState('all');
@@ -161,16 +163,57 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
     sku: '',
     name: '',
     brand: '',
+    company: '',
+    companyId: '',
     model: '',
-    category: 'module',
+    category: 'Solar Panel',
+    categoryId: '',
     wattage: 550,
+    capacity: 550,
+    capacityUnit: 'W',
     price: 18500,
+    discountPrice: 0,
     dimensions: '2278 × 1134 × 35 mm',
     efficiency: 21.3,
     warranty: '25 years performance',
     stock: 50,
+    availability: 'in_stock',
+    featured: false,
+    image: '',
+    galleryImagesText: '',
+    currency: 'BDT',
+    unit: 'piece',
     status: 'approved',
     description: '',
+  });
+
+  // Companies Management State
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [companySearch, setCompanySearch] = useState('');
+  const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<any | null>(null);
+  const [newCompany, setNewCompany] = useState({
+    name: '',
+    logo: '',
+    description: '',
+    website: '',
+    country: 'China',
+    contactInformation: '',
+    status: 'active',
+  });
+
+  // Categories Management State
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    icon: '☀️',
+    image: '',
+    status: 'active',
   });
 
   // ==========================================
@@ -293,9 +336,21 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
       } else if (activeTab === 'appliances') {
         const res = await api<{ appliances: any[] }>('/admin/appliances');
         setAppliances(res.appliances);
+      } else if (activeTab === 'companies') {
+        const res = await api<{ companies: any[] }>('/admin/companies');
+        setCompanies(res.companies);
+      } else if (activeTab === 'categories') {
+        const res = await api<{ categories: any[] }>('/admin/categories');
+        setCategories(res.categories);
       } else if (activeTab === 'products') {
-        const res = await api<{ products: any[] }>('/admin/products');
-        setProducts(res.products);
+        const [prodRes, compRes, catRes] = await Promise.all([
+          api<{ products: any[] }>('/admin/products'),
+          api<{ companies: any[] }>('/admin/companies'),
+          api<{ categories: any[] }>('/admin/categories'),
+        ]);
+        setProducts(prodRes.products);
+        setCompanies(compRes.companies);
+        setCategories(catRes.categories);
       } else if (activeTab === 'packages') {
         const [pkgRes, prodRes] = await Promise.all([
           api<{ packages: any[] }>('/admin/packages'),
@@ -690,32 +745,172 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
   }
 
   // ==========================================
+  // COMPANY ACTIONS (Section 11)
+  // ==========================================
+  async function createCompany(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await api('/admin/companies', {
+        method: 'POST',
+        body: JSON.stringify(newCompany),
+      });
+      setMessage('Company/brand added successfully.');
+      setShowCreateCompanyModal(false);
+      setNewCompany({
+        name: '',
+        logo: '',
+        description: '',
+        website: '',
+        country: 'China',
+        contactInformation: '',
+        status: 'active',
+      });
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  async function updateCompany(e: FormEvent) {
+    e.preventDefault();
+    if (!editingCompany) return;
+    try {
+      await api(`/admin/companies/${editingCompany.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editingCompany.name,
+          logo: editingCompany.logo,
+          description: editingCompany.description,
+          website: editingCompany.website,
+          country: editingCompany.country,
+          contactInformation: editingCompany.contactInformation,
+          status: editingCompany.status,
+        }),
+      });
+      setMessage('Company updated successfully.');
+      setEditingCompany(null);
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  async function deleteCompany(id: string) {
+    if (!confirm('Permanently delete this company?')) return;
+    try {
+      await api(`/admin/companies/${id}`, { method: 'DELETE' });
+      setMessage('Company deleted.');
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  // ==========================================
+  // CATEGORY ACTIONS (Section 12)
+  // ==========================================
+  async function createCategory(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await api('/admin/categories', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...newCategory,
+          slug: newCategory.slug || newCategory.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        }),
+      });
+      setMessage('Category created successfully.');
+      setShowCreateCategoryModal(false);
+      setNewCategory({
+        name: '',
+        slug: '',
+        description: '',
+        icon: '☀️',
+        image: '',
+        status: 'active',
+      });
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  async function updateCategory(e: FormEvent) {
+    e.preventDefault();
+    if (!editingCategory) return;
+    try {
+      await api(`/admin/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editingCategory.name,
+          slug: editingCategory.slug,
+          description: editingCategory.description,
+          icon: editingCategory.icon,
+          image: editingCategory.image,
+          status: editingCategory.status,
+        }),
+      });
+      setMessage('Category updated.');
+      setEditingCategory(null);
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  async function deleteCategory(id: string) {
+    if (!confirm('Permanently delete this category?')) return;
+    try {
+      await api(`/admin/categories/${id}`, { method: 'DELETE' });
+      setMessage('Category deleted.');
+      void loadData();
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  // ==========================================
   // PRODUCT CATALOG ACTIONS (DIFFERENT COMPANIES)
   // ==========================================
   async function createProduct(e: FormEvent) {
     e.preventDefault();
     try {
+      const gallery = newProduct.galleryImagesText
+        ? newProduct.galleryImagesText.split('\n').map((s) => s.trim()).filter(Boolean)
+        : [];
+
       await api('/admin/products', {
         method: 'POST',
-        body: JSON.stringify(newProduct),
+        body: JSON.stringify({
+          sku: newProduct.sku,
+          name: newProduct.name,
+          brand: newProduct.brand,
+          company: newProduct.company || newProduct.brand,
+          companyId: newProduct.companyId || null,
+          model: newProduct.model,
+          category: newProduct.category,
+          categoryId: newProduct.categoryId || null,
+          wattage: Number(newProduct.wattage || 0),
+          capacity: Number(newProduct.capacity || newProduct.wattage || 0),
+          capacityUnit: newProduct.capacityUnit || 'W',
+          price: Number(newProduct.price),
+          discountPrice: newProduct.discountPrice ? Number(newProduct.discountPrice) : null,
+          dimensions: newProduct.dimensions,
+          efficiency: newProduct.efficiency ? Number(newProduct.efficiency) : null,
+          warranty: newProduct.warranty,
+          stock: Number(newProduct.stock || 0),
+          availability: newProduct.availability,
+          featured: Boolean(newProduct.featured),
+          image: newProduct.image,
+          galleryImages: gallery,
+          currency: newProduct.currency || 'BDT',
+          unit: newProduct.unit || 'piece',
+          status: newProduct.status,
+          description: newProduct.description,
+        }),
       });
       setMessage('Hardware product added to catalog.');
       setShowCreateProductModal(false);
-      setNewProduct({
-        sku: '',
-        name: '',
-        brand: '',
-        model: '',
-        category: 'module',
-        wattage: 550,
-        price: 18500,
-        dimensions: '2278 × 1134 × 35 mm',
-        efficiency: 21.3,
-        warranty: '25 years performance',
-        stock: 50,
-        status: 'approved',
-        description: '',
-      });
       void loadData();
     } catch (err) {
       setMessage((err as Error).message);
@@ -726,20 +921,38 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
     e.preventDefault();
     if (!editingProduct) return;
     try {
+      const gallery = typeof editingProduct.galleryImagesText === 'string'
+        ? editingProduct.galleryImagesText.split('\n').map((s: string) => s.trim()).filter(Boolean)
+        : Array.isArray(editingProduct.galleryImages)
+        ? editingProduct.galleryImages
+        : [];
+
       await api(`/admin/products/${editingProduct.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           sku: editingProduct.sku,
           name: editingProduct.name,
           brand: editingProduct.brand,
+          company: editingProduct.company?.name || editingProduct.company || editingProduct.brand,
+          companyId: editingProduct.companyId || null,
           model: editingProduct.model,
           category: editingProduct.category,
-          wattage: Number(editingProduct.wattage),
+          categoryId: editingProduct.categoryId || null,
+          wattage: Number(editingProduct.wattage || 0),
+          capacity: Number(editingProduct.capacity || editingProduct.wattage || 0),
+          capacityUnit: editingProduct.capacityUnit || 'W',
           price: Number(editingProduct.price),
+          discountPrice: editingProduct.discountPrice ? Number(editingProduct.discountPrice) : null,
           dimensions: editingProduct.dimensions,
-          efficiency: Number(editingProduct.efficiency),
+          efficiency: editingProduct.efficiency ? Number(editingProduct.efficiency) : null,
           warranty: editingProduct.warranty,
-          stock: Number(editingProduct.stock),
+          stock: Number(editingProduct.stock || 0),
+          availability: editingProduct.availability,
+          featured: Boolean(editingProduct.featured),
+          image: editingProduct.image,
+          galleryImages: gallery,
+          currency: editingProduct.currency || 'BDT',
+          unit: editingProduct.unit || 'piece',
           status: editingProduct.status,
           description: editingProduct.description,
         }),
@@ -765,22 +978,39 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
 
   // Distinct company/brand names for filtering
   const companyList = Array.from(
-    new Set(products.map((p) => p.brand).filter((b): b is string => Boolean(b && b.trim())))
+    new Set([
+      ...companies.map((c) => c.name),
+      ...products.map((p) => (typeof p.company === 'object' ? p.company?.name : p.company || p.brand)),
+    ].filter((b): b is string => Boolean(b && b.trim())))
   ).sort();
 
   // Filtered products list
   const filteredProducts = products.filter((p) => {
-    if (productCompanyFilter !== 'all' && p.brand !== productCompanyFilter) return false;
-    if (productCategoryFilter !== 'all' && p.category !== productCategoryFilter) return false;
+    const pComp = typeof p.company === 'object' ? p.company?.name : p.company || p.brand;
+    const pCat = typeof p.categoryItem === 'object' ? p.categoryItem?.name : p.category;
+    if (productCompanyFilter !== 'all' && pComp !== productCompanyFilter && p.brand !== productCompanyFilter) return false;
+    if (productCategoryFilter !== 'all' && pCat !== productCategoryFilter && p.category !== productCategoryFilter) return false;
     if (productSearch) {
       const q = productSearch.toLowerCase();
       const matchSku = p.sku?.toLowerCase().includes(q);
       const matchName = p.name?.toLowerCase().includes(q);
-      const matchBrand = p.brand?.toLowerCase().includes(q);
+      const matchBrand = (pComp || p.brand)?.toLowerCase().includes(q);
       const matchModel = p.model?.toLowerCase().includes(q);
       if (!matchSku && !matchName && !matchBrand && !matchModel) return false;
     }
     return true;
+  });
+
+  const filteredCompanies = companies.filter((c) => {
+    if (!companySearch) return true;
+    const q = companySearch.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || c.country?.toLowerCase().includes(q);
+  });
+
+  const filteredCategories = categories.filter((c) => {
+    if (!categorySearch) return true;
+    const q = categorySearch.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || c.slug?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q);
   });
 
   // ==========================================
@@ -886,6 +1116,55 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
           ⏳ Fetching operational registry data...
         </div>
       )}
+
+      {/* Admin Tab Navigation Bar */}
+      <div className="admin-nav-tabs-bar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+        {[
+          { id: 'orders', label: '📋 Orders & Requests', count: orders.length },
+          { id: 'users', label: '👥 Users', count: userTotal || users.length },
+          { id: 'products', label: '⚡ Products & Hardware', count: products.length },
+          { id: 'companies', label: '🏢 Companies / Brands', count: companies.length },
+          { id: 'categories', label: '📦 Categories', count: categories.length },
+          { id: 'packages', label: '🎁 Turnkey Packages', count: packages.length },
+          { id: 'appliances', label: '🔌 Appliances', count: appliances.length },
+          { id: 'technicians', label: '👷 Technicians', count: technicians.length },
+          { id: 'tech_payments', label: '💳 Disbursements', count: techPayments.length },
+          { id: 'settings', label: '⚙ Pricing & Control' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`admin-tab-chip ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab(tab.id as AdminSection);
+              window.history.pushState(null, '', tab.id === 'orders' ? '/admin/orders' : tab.id === 'settings' ? '/admin/control' : `/admin/${tab.id}`);
+            }}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '20px',
+              border: activeTab === tab.id ? '2px solid #1d4ed8' : '1.5px solid #cbd5e1',
+              background: activeTab === tab.id ? '#1d4ed8' : '#ffffff',
+              color: activeTab === tab.id ? '#ffffff' : '#334155',
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              fontSize: '13px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              boxShadow: activeTab === tab.id ? '0 2px 8px rgba(29, 78, 216, 0.35)' : 'none',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span style={{ fontSize: '11px', background: activeTab === tab.id ? '#fbbf24' : '#e2e8f0', color: activeTab === tab.id ? '#0f172a' : '#475569', fontWeight: 800, padding: '1px 7px', borderRadius: '10px' }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
       {/* ========================================================================= */}
       {/* 1. ORDER MONITOR PAGE (CRUD)                                             */}
@@ -1469,7 +1748,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
           <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <span className="eyebrow">Tier-1 Hardware Inventory</span>
-              <h2>Solar Panels & Equipment by Company ({filteredProducts.length})</h2>
+              <h2>Renewable Energy Equipment Catalog ({filteredProducts.length})</h2>
             </div>
             <button className="primary-button" onClick={() => setShowCreateProductModal(true)} type="button">
               + Add Hardware Product
@@ -1479,7 +1758,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
           {/* Filter Bar */}
           <div className="filters-bar" style={{ display: 'flex', gap: '10px', margin: '16px 0', flexWrap: 'wrap' }}>
             <input
-              placeholder="Search by SKU, Model, Name..."
+              placeholder="Search by SKU, Model, Name, Brand..."
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               style={{ flex: 1, minWidth: '200px' }}
@@ -1492,74 +1771,353 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
             </select>
             <select value={productCategoryFilter} onChange={(e) => setProductCategoryFilter(e.target.value)}>
               <option value="all">📦 All Categories</option>
-              <option value="module">Solar Photovoltaic Modules</option>
-              <option value="inverter">Inverters</option>
-              <option value="battery">Energy Storage / Batteries</option>
-              <option value="turbine">Wind Turbines</option>
-              <option value="mounting">Mounting Structures</option>
-              <option value="electrical">Electrical BOS & Protection</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+              <option value="Solar Panel">Solar Panel</option>
+              <option value="Wind Turbine">Wind Turbine</option>
+              <option value="Battery">Battery</option>
+              <option value="Inverter">Inverter</option>
+              <option value="Charge Controller">Charge Controller</option>
+              <option value="Mounting Structure">Mounting Structure</option>
+              <option value="Accessories">Accessories</option>
             </select>
           </div>
 
           <table className="doc-table-bordered">
             <thead>
               <tr>
-                <th>SKU</th>
-                <th>Manufacturer / Company</th>
-                <th>Product Name & Model</th>
+                <th style={{ width: '60px' }}>Image</th>
+                <th>SKU & Model</th>
+                <th>Manufacturer / Brand</th>
+                <th>Product Name</th>
                 <th>Category</th>
-                <th>Rating / Capacity</th>
-                <th>Regular Price (BDT)</th>
-                <th>Stock</th>
+                <th>Capacity / Specs</th>
+                <th>Price & Discount</th>
+                <th>Stock / Status</th>
+                <th>Featured</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '28px', color: '#a0aec0' }}>
+                    No products found matching the criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((p) => {
+                  const companyName = typeof p.company === 'object' ? p.company?.name : p.company || p.brand || 'General';
+                  const categoryName = typeof p.categoryItem === 'object' ? p.categoryItem?.name : p.category;
+                  const hasDiscount = p.discountPrice && Number(p.discountPrice) > 0 && Number(p.discountPrice) < Number(p.price);
+
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '6px', overflow: 'hidden', background: '#f7fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }}>
+                          {p.image ? (
+                            <img src={p.image} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          ) : (
+                            <span style={{ fontSize: '20px' }}>⚡</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <code>{p.sku}</code>
+                        {p.model && <div style={{ fontSize: '11px', color: '#718096' }}>Mod: {p.model}</div>}
+                      </td>
+                      <td>
+                        <strong style={{ color: '#2b6cb0' }}>{companyName}</strong>
+                      </td>
+                      <td>
+                        <strong>{p.name}</strong>
+                      </td>
+                      <td>
+                        <span className="pill">{categoryName}</span>
+                      </td>
+                      <td>
+                        {p.capacity ? `${p.capacity} ${p.capacityUnit || 'W'}` : p.wattage ? `${p.wattage} W` : '—'}
+                        {p.efficiency ? <div style={{ fontSize: '11px', color: '#718096' }}>{p.efficiency}% eff</div> : null}
+                      </td>
+                      <td>
+                        {hasDiscount ? (
+                          <div>
+                            <strong style={{ color: '#2f855a' }}>BDT {Number(p.discountPrice).toLocaleString()}</strong>
+                            <div style={{ fontSize: '11px', color: '#a0aec0', textDecoration: 'line-through' }}>
+                              BDT {Number(p.price).toLocaleString()}
+                            </div>
+                          </div>
+                        ) : (
+                          <strong>BDT {Number(p.price).toLocaleString()}</strong>
+                        )}
+                        <span style={{ fontSize: '11px', color: '#718096' }}> / {p.unit || 'unit'}</span>
+                      </td>
+                      <td>
+                        <span className={`pill ${p.availability === 'in_stock' ? 'success' : p.availability === 'low_stock' ? 'warning' : ''}`}>
+                          {p.availability === 'in_stock' ? 'In Stock' : p.availability === 'low_stock' ? 'Low Stock' : p.availability === 'pre_order' ? 'Pre-Order' : 'Out of Stock'}
+                        </span>
+                        <div style={{ fontSize: '11px', color: '#718096', marginTop: '2px' }}>{p.stock ?? 0} units</div>
+                      </td>
+                      <td>
+                        {p.featured ? (
+                          <span title="Featured on home page" style={{ color: '#d69e2e', fontSize: '16px' }}>⭐ Yes</span>
+                        ) : (
+                          <span style={{ color: '#cbd5e0', fontSize: '12px' }}>No</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="secondary-button"
+                            onClick={() => {
+                              setEditingProduct({
+                                ...p,
+                                companyId: p.companyId || (typeof p.company === 'object' ? p.company?.id : ''),
+                                categoryId: p.categoryId || (typeof p.categoryItem === 'object' ? p.categoryItem?.id : ''),
+                                galleryImagesText: Array.isArray(p.galleryImages) ? p.galleryImages.join('\n') : '',
+                              });
+                            }}
+                            type="button"
+                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => deleteProduct(p.id)}
+                            type="button"
+                            style={{ color: '#e53e3e', padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8. COMPANIES & BRANDS MANAGEMENT (Section 11)                           */}
+      {/* ========================================================================= */}
+      {activeTab === 'companies' && (
+        <section className="panel">
+          <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <span className="eyebrow">Brand & Manufacturer Network</span>
+              <h2>Companies & Equipment Brands ({filteredCompanies.length})</h2>
+            </div>
+            <button className="primary-button" onClick={() => setShowCreateCompanyModal(true)} type="button">
+              + Add Company / Brand
+            </button>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="filters-bar" style={{ display: 'flex', gap: '10px', margin: '16px 0', flexWrap: 'wrap' }}>
+            <input
+              placeholder="Search by company name, country..."
+              value={companySearch}
+              onChange={(e) => setCompanySearch(e.target.value)}
+              style={{ flex: 1, minWidth: '220px' }}
+            />
+          </div>
+
+          <table className="doc-table-bordered">
+            <thead>
+              <tr>
+                <th style={{ width: '60px' }}>Logo</th>
+                <th>Company / Brand Name</th>
+                <th>Country of Origin</th>
+                <th>Website</th>
+                <th>Contact Info</th>
+                <th>Products Count</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((p) => (
-                <tr key={p.id}>
-                  <td><code>{p.sku}</code></td>
-                  <td>
-                    <strong style={{ color: '#2b6cb0' }}>{p.brand || 'General'}</strong>
-                  </td>
-                  <td>
-                    <strong>{p.name}</strong>
-                    {p.model && <div style={{ fontSize: '11px', color: '#718096' }}>Model: {p.model}</div>}
-                  </td>
-                  <td><span className="pill">{p.category?.toUpperCase()}</span></td>
-                  <td>
-                    {p.wattage ? `${p.wattage} W` : 'N/A'}
-                    {p.efficiency ? ` · ${p.efficiency}% eff` : ''}
-                  </td>
-                  <td><strong>BDT {Number(p.price).toLocaleString()}</strong></td>
-                  <td>{p.stock} units</td>
-                  <td>
-                    <span className={`pill ${p.status === 'preferred' || p.status === 'approved' ? 'success' : ''}`}>
-                      {p.status?.toUpperCase()}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        className="secondary-button"
-                        onClick={() => setEditingProduct({ ...p })}
-                        type="button"
-                        style={{ padding: '4px 8px', fontSize: '12px' }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => deleteProduct(p.id)}
-                        type="button"
-                        style={{ color: '#e53e3e', padding: '4px 8px', fontSize: '12px' }}
-                      >
-                        🗑️
-                      </button>
-                    </div>
+              {filteredCompanies.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '28px', color: '#a0aec0' }}>
+                    No companies found. Click "+ Add Company / Brand" to register one.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredCompanies.map((c) => {
+                  const companyProductCount = products.filter((p) => p.companyId === c.id || (typeof p.company === 'string' && p.company === c.name)).length;
+
+                  return (
+                    <tr key={c.id}>
+                      <td>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '8px', overflow: 'hidden', background: '#f7fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }}>
+                          {c.logo ? (
+                            <img src={c.logo} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          ) : (
+                            <span style={{ fontSize: '18px' }}>🏢</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <strong style={{ fontSize: '14px', color: '#2d3748' }}>{c.name}</strong>
+                        {c.description && (
+                          <div style={{ fontSize: '11px', color: '#718096', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {c.description}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <span>{c.country || 'International'}</span>
+                      </td>
+                      <td>
+                        {c.website ? (
+                          <a href={c.website} target="_blank" rel="noopener noreferrer" style={{ color: '#3182ce', textDecoration: 'none', fontSize: '12px' }}>
+                            {c.website.replace(/^https?:\/\//, '')} ↗
+                          </a>
+                        ) : (
+                          <span style={{ color: '#a0aec0', fontSize: '12px' }}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '12px', color: '#4a5568' }}>{c.contactInformation || '—'}</span>
+                      </td>
+                      <td>
+                        <span className="pill">{companyProductCount} items</span>
+                      </td>
+                      <td>
+                        <span className={`pill ${c.status === 'active' ? 'success' : ''}`}>
+                          {c.status?.toUpperCase() || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="secondary-button"
+                            onClick={() => setEditingCompany({ ...c })}
+                            type="button"
+                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => deleteCompany(c.id)}
+                            type="button"
+                            style={{ color: '#e53e3e', padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9. CATEGORIES MANAGEMENT (Section 12)                                   */}
+      {/* ========================================================================= */}
+      {activeTab === 'categories' && (
+        <section className="panel">
+          <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <span className="eyebrow">Equipment Taxonomy</span>
+              <h2>Product Categories ({filteredCategories.length})</h2>
+            </div>
+            <button className="primary-button" onClick={() => setShowCreateCategoryModal(true)} type="button">
+              + Add Category
+            </button>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="filters-bar" style={{ display: 'flex', gap: '10px', margin: '16px 0', flexWrap: 'wrap' }}>
+            <input
+              placeholder="Search category name, slug, description..."
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              style={{ flex: 1, minWidth: '220px' }}
+            />
+          </div>
+
+          <table className="doc-table-bordered">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>Icon</th>
+                <th>Category Name</th>
+                <th>URL Slug</th>
+                <th>Description</th>
+                <th>Products Count</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCategories.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: '#a0aec0' }}>
+                    No categories found. Click "+ Add Category" to create one.
+                  </td>
+                </tr>
+              ) : (
+                filteredCategories.map((cat) => {
+                  const catProductCount = products.filter((p) => p.categoryId === cat.id || p.category === cat.name).length;
+
+                  return (
+                    <tr key={cat.id}>
+                      <td style={{ textAlign: 'center', fontSize: '24px' }}>
+                        {cat.icon || '📦'}
+                      </td>
+                      <td>
+                        <strong style={{ fontSize: '14px', color: '#2d3748' }}>{cat.name}</strong>
+                      </td>
+                      <td>
+                        <code>{cat.slug}</code>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '12px', color: '#718096', maxWidth: '350px' }}>
+                          {cat.description || '—'}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="pill">{catProductCount} products</span>
+                      </td>
+                      <td>
+                        <span className={`pill ${cat.status === 'active' ? 'success' : ''}`}>
+                          {cat.status?.toUpperCase() || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="secondary-button"
+                            onClick={() => setEditingCategory({ ...cat })}
+                            type="button"
+                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => deleteCategory(cat.id)}
+                            type="button"
+                            style={{ color: '#e53e3e', padding: '4px 8px', fontSize: '12px' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </section>
@@ -2623,63 +3181,182 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
         </div>
       )}
 
-      {/* 15. Modal: Create Product */}
+      {/* 15. Modal: Create Hardware Product */}
       {showCreateProductModal && (
         <div className="admin-modal-overlay">
-          <div className="admin-modal-card">
+          <div className="admin-modal-card" style={{ maxWidth: '780px' }}>
             <div className="admin-modal-header">
-              <h3>Add Hardware Product to Catalog</h3>
+              <h3>Add Equipment Product to Catalog</h3>
               <button className="text-button" onClick={() => setShowCreateProductModal(false)}>✕</button>
             </div>
             <form onSubmit={createProduct}>
               <div className="form-grid-2">
                 <div>
-                  <label>SKU (Stock Keeping Unit)</label>
-                  <input required placeholder="e.g. PV-LONGI-550M" value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} />
+                  <label>SKU (Stock Keeping Unit) *</label>
+                  <input required placeholder="e.g. PV-LONGI-585-BIF" value={newProduct.sku} onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })} />
                 </div>
                 <div>
-                  <label>Manufacturer / Company Brand</label>
-                  <input required placeholder="e.g. LONGi Solar, Huawei, Growatt" value={newProduct.brand} onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })} />
+                  <label>Company / Brand *</label>
+                  <select
+                    value={newProduct.companyId || ''}
+                    onChange={(e) => {
+                      const compId = e.target.value;
+                      const matched = companies.find((c) => c.id === compId);
+                      setNewProduct({
+                        ...newProduct,
+                        companyId: compId,
+                        company: matched ? matched.name : newProduct.company,
+                        brand: matched ? matched.name : newProduct.brand,
+                      });
+                    }}
+                  >
+                    <option value="">-- Select Registered Brand or Enter Manual --</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.country || 'Global'})</option>
+                    ))}
+                  </select>
+                  <input
+                    style={{ marginTop: '6px' }}
+                    placeholder="Or type brand name..."
+                    value={newProduct.brand}
+                    onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value, company: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <label>Product Model</label>
-                  <input placeholder="e.g. Hi-MO 5m" value={newProduct.model} onChange={(e) => setNewProduct({ ...newProduct, model: e.target.value })} />
+                  <label>Product Display Name *</label>
+                  <input required placeholder="e.g. Hi-MO X6 Explorer 585W Bifacial Solar Panel" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
                 </div>
                 <div>
-                  <label>Product Display Name</label>
-                  <input required placeholder="e.g. LONGi 550W Mono PERC Tier-1" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
+                  <label>Model Number</label>
+                  <input placeholder="e.g. LR5-72HBD-585M" value={newProduct.model} onChange={(e) => setNewProduct({ ...newProduct, model: e.target.value })} />
                 </div>
                 <div>
-                  <label>Hardware Category</label>
-                  <select value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}>
-                    <option value="module">Solar Photovoltaic Module</option>
-                    <option value="inverter">Inverter (Grid-tied / Hybrid)</option>
-                    <option value="battery">Energy Storage / Battery</option>
-                    <option value="turbine">Wind Turbine</option>
-                    <option value="mounting">Mounting Structure</option>
-                    <option value="electrical">Electrical Protection / BOS</option>
+                  <label>Equipment Category *</label>
+                  <select
+                    value={newProduct.categoryId || ''}
+                    onChange={(e) => {
+                      const catId = e.target.value;
+                      const matched = categories.find((c) => c.id === catId);
+                      setNewProduct({
+                        ...newProduct,
+                        categoryId: catId,
+                        category: matched ? matched.name : newProduct.category,
+                      });
+                    }}
+                  >
+                    <option value="">-- Choose Category --</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.icon || '📦'} {c.name}</option>
+                    ))}
+                    <option value="">Solar Panel</option>
+                    <option value="">Wind Turbine</option>
+                    <option value="">Battery</option>
+                    <option value="">Inverter</option>
+                    <option value="">Charge Controller</option>
+                    <option value="">Mounting Structure</option>
+                    <option value="">Accessories</option>
                   </select>
                 </div>
                 <div>
-                  <label>Rating / Wattage (W)</label>
-                  <input type="number" value={newProduct.wattage} onChange={(e) => setNewProduct({ ...newProduct, wattage: Number(e.target.value) })} />
+                  <label>Capacity / Power Rating & Unit</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number"
+                      placeholder="e.g. 585"
+                      value={newProduct.capacity || newProduct.wattage}
+                      onChange={(e) => setNewProduct({ ...newProduct, capacity: Number(e.target.value), wattage: Number(e.target.value) })}
+                      style={{ flex: 2 }}
+                    />
+                    <select
+                      value={newProduct.capacityUnit}
+                      onChange={(e) => setNewProduct({ ...newProduct, capacityUnit: e.target.value })}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="W">W</option>
+                      <option value="kW">kW</option>
+                      <option value="kWh">kWh</option>
+                      <option value="Ah">Ah</option>
+                      <option value="kVA">kVA</option>
+                      <option value="A">A</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label>Regular Price (BDT)</label>
+                  <label>Regular Price (BDT) *</label>
                   <input required type="number" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} />
                 </div>
                 <div>
+                  <label>Discount Price (BDT, Optional)</label>
+                  <input type="number" placeholder="Leave 0 if none" value={newProduct.discountPrice || ''} onChange={(e) => setNewProduct({ ...newProduct, discountPrice: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label>Availability & Stock</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      value={newProduct.availability}
+                      onChange={(e) => setNewProduct({ ...newProduct, availability: e.target.value })}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="in_stock">In Stock</option>
+                      <option value="low_stock">Low Stock</option>
+                      <option value="pre_order">Pre-Order</option>
+                      <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Units"
+                      value={newProduct.stock}
+                      onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })}
+                      style={{ width: '90px' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label>Unit Label</label>
+                  <input placeholder="e.g. piece, set, meter" value={newProduct.unit} onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })} />
+                </div>
+                <div>
+                  <label>Primary Image URL</label>
+                  <input placeholder="https://images.unsplash.com/..." value={newProduct.image} onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })} />
+                </div>
+                <div>
+                  <label>Featured on Home Page?</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 'normal' }}>
+                      <input
+                        type="checkbox"
+                        checked={newProduct.featured}
+                        onChange={(e) => setNewProduct({ ...newProduct, featured: e.target.checked })}
+                      />
+                      ⭐ Mark as Featured Showcase Product
+                    </label>
+                  </div>
+                </div>
+                <div>
                   <label>Efficiency Rating (%)</label>
-                  <input type="number" step="0.1" value={newProduct.efficiency} onChange={(e) => setNewProduct({ ...newProduct, efficiency: Number(e.target.value) })} />
+                  <input type="number" step="0.1" placeholder="e.g. 22.6" value={newProduct.efficiency || ''} onChange={(e) => setNewProduct({ ...newProduct, efficiency: Number(e.target.value) })} />
                 </div>
                 <div>
                   <label>Warranty Terms</label>
-                  <input value={newProduct.warranty} onChange={(e) => setNewProduct({ ...newProduct, warranty: e.target.value })} placeholder="e.g. 25 yr linear power" />
+                  <input value={newProduct.warranty} onChange={(e) => setNewProduct({ ...newProduct, warranty: e.target.value })} placeholder="e.g. 25-Year Linear Power Warranty" />
                 </div>
                 <div>
-                  <label>Current Stock Units</label>
-                  <input type="number" value={newProduct.stock} onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })} />
+                  <label>Physical Dimensions</label>
+                  <input value={newProduct.dimensions} onChange={(e) => setNewProduct({ ...newProduct, dimensions: e.target.value })} placeholder="e.g. 2278 × 1134 × 35 mm" />
                 </div>
+                <div>
+                  <label>Approval Status</label>
+                  <select value={newProduct.status} onChange={(e) => setNewProduct({ ...newProduct, status: e.target.value })}>
+                    <option value="approved">Approved</option>
+                    <option value="preferred">Preferred Tier-1</option>
+                    <option value="conditional">Conditional</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Gallery Image URLs (one per line)</label>
+                <textarea rows={2} placeholder="https://...\nhttps://..." value={newProduct.galleryImagesText} onChange={(e) => setNewProduct({ ...newProduct, galleryImagesText: e.target.value })} />
               </div>
               <div style={{ marginTop: '12px' }}>
                 <label>Technical Description</label>
@@ -2694,60 +3371,377 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
         </div>
       )}
 
-      {/* 16. Modal: Edit Product */}
+      {/* 16. Modal: Edit Hardware Product */}
       {editingProduct && (
         <div className="admin-modal-overlay">
-          <div className="admin-modal-card">
+          <div className="admin-modal-card" style={{ maxWidth: '780px' }}>
             <div className="admin-modal-header">
-              <h3>Edit Product: {editingProduct.sku}</h3>
+              <h3>Edit Equipment: {editingProduct.sku}</h3>
               <button className="text-button" onClick={() => setEditingProduct(null)}>✕</button>
             </div>
             <form onSubmit={updateProduct}>
               <div className="form-grid-2">
                 <div>
-                  <label>Company / Brand</label>
-                  <input required value={editingProduct.brand || ''} onChange={(e) => setEditingProduct({ ...editingProduct, brand: e.target.value })} />
+                  <label>SKU (Stock Keeping Unit) *</label>
+                  <input required value={editingProduct.sku} onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })} />
                 </div>
                 <div>
-                  <label>Model</label>
-                  <input value={editingProduct.model || ''} onChange={(e) => setEditingProduct({ ...editingProduct, model: e.target.value })} />
+                  <label>Company / Brand *</label>
+                  <select
+                    value={editingProduct.companyId || ''}
+                    onChange={(e) => {
+                      const compId = e.target.value;
+                      const matched = companies.find((c) => c.id === compId);
+                      setEditingProduct({
+                        ...editingProduct,
+                        companyId: compId,
+                        company: matched ? matched.name : editingProduct.company,
+                        brand: matched ? matched.name : editingProduct.brand,
+                      });
+                    }}
+                  >
+                    <option value="">-- Select Registered Brand or Enter Manual --</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.country || 'Global'})</option>
+                    ))}
+                  </select>
+                  <input
+                    style={{ marginTop: '6px' }}
+                    placeholder="Or type brand name..."
+                    value={typeof editingProduct.brand === 'string' ? editingProduct.brand : ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, brand: e.target.value, company: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <label>Name</label>
+                  <label>Product Display Name *</label>
                   <input required value={editingProduct.name} onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })} />
                 </div>
                 <div>
-                  <label>Wattage (W)</label>
-                  <input type="number" value={editingProduct.wattage || 0} onChange={(e) => setEditingProduct({ ...editingProduct, wattage: Number(e.target.value) })} />
+                  <label>Model Number</label>
+                  <input value={editingProduct.model || ''} onChange={(e) => setEditingProduct({ ...editingProduct, model: e.target.value })} />
                 </div>
                 <div>
-                  <label>Price (BDT)</label>
+                  <label>Equipment Category *</label>
+                  <select
+                    value={editingProduct.categoryId || ''}
+                    onChange={(e) => {
+                      const catId = e.target.value;
+                      const matched = categories.find((c) => c.id === catId);
+                      setEditingProduct({
+                        ...editingProduct,
+                        categoryId: catId,
+                        category: matched ? matched.name : editingProduct.category,
+                      });
+                    }}
+                  >
+                    <option value="">-- Choose Category --</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.icon || '📦'} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Capacity / Power Rating & Unit</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number"
+                      value={editingProduct.capacity || editingProduct.wattage || 0}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, capacity: Number(e.target.value), wattage: Number(e.target.value) })}
+                      style={{ flex: 2 }}
+                    />
+                    <select
+                      value={editingProduct.capacityUnit || 'W'}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, capacityUnit: e.target.value })}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="W">W</option>
+                      <option value="kW">kW</option>
+                      <option value="kWh">kWh</option>
+                      <option value="Ah">Ah</option>
+                      <option value="kVA">kVA</option>
+                      <option value="A">A</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label>Regular Price (BDT) *</label>
                   <input required type="number" value={editingProduct.price} onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label>Efficiency (%)</label>
-                  <input type="number" step="0.1" value={editingProduct.efficiency || 0} onChange={(e) => setEditingProduct({ ...editingProduct, efficiency: Number(e.target.value) })} />
+                  <label>Discount Price (BDT, Optional)</label>
+                  <input type="number" placeholder="Leave 0 if none" value={editingProduct.discountPrice || ''} onChange={(e) => setEditingProduct({ ...editingProduct, discountPrice: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label>Warranty</label>
+                  <label>Availability & Stock</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      value={editingProduct.availability || 'in_stock'}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, availability: e.target.value })}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="in_stock">In Stock</option>
+                      <option value="low_stock">Low Stock</option>
+                      <option value="pre_order">Pre-Order</option>
+                      <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Units"
+                      value={editingProduct.stock || 0}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, stock: Number(e.target.value) })}
+                      style={{ width: '90px' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label>Unit Label</label>
+                  <input placeholder="e.g. piece, set" value={editingProduct.unit || 'piece'} onChange={(e) => setEditingProduct({ ...editingProduct, unit: e.target.value })} />
+                </div>
+                <div>
+                  <label>Primary Image URL</label>
+                  <input placeholder="https://..." value={editingProduct.image || ''} onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })} />
+                </div>
+                <div>
+                  <label>Featured on Home Page?</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 'normal' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingProduct.featured)}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, featured: e.target.checked })}
+                      />
+                      ⭐ Mark as Featured Showcase Product
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label>Efficiency Rating (%)</label>
+                  <input type="number" step="0.1" value={editingProduct.efficiency || ''} onChange={(e) => setEditingProduct({ ...editingProduct, efficiency: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label>Warranty Terms</label>
                   <input value={editingProduct.warranty || ''} onChange={(e) => setEditingProduct({ ...editingProduct, warranty: e.target.value })} />
                 </div>
                 <div>
-                  <label>Stock</label>
-                  <input type="number" value={editingProduct.stock || 0} onChange={(e) => setEditingProduct({ ...editingProduct, stock: Number(e.target.value) })} />
+                  <label>Physical Dimensions</label>
+                  <input value={editingProduct.dimensions || ''} onChange={(e) => setEditingProduct({ ...editingProduct, dimensions: e.target.value })} />
                 </div>
                 <div>
-                  <label>Status</label>
+                  <label>Approval Status</label>
                   <select value={editingProduct.status} onChange={(e) => setEditingProduct({ ...editingProduct, status: e.target.value })}>
-                    <option value="preferred">Preferred</option>
                     <option value="approved">Approved</option>
+                    <option value="preferred">Preferred Tier-1</option>
                     <option value="conditional">Conditional</option>
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
               </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Gallery Image URLs (one per line)</label>
+                <textarea rows={2} value={editingProduct.galleryImagesText || ''} onChange={(e) => setEditingProduct({ ...editingProduct, galleryImagesText: e.target.value })} />
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Technical Description</label>
+                <textarea rows={2} value={editingProduct.description || ''} onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })} />
+              </div>
               <div className="admin-modal-footer">
                 <button className="secondary-button" type="button" onClick={() => setEditingProduct(null)}>Cancel</button>
+                <button className="primary-button" type="submit">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create Company / Brand */}
+      {showCreateCompanyModal && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-card">
+            <div className="admin-modal-header">
+              <h3>Register Equipment Company / Brand</h3>
+              <button className="text-button" onClick={() => setShowCreateCompanyModal(false)}>✕</button>
+            </div>
+            <form onSubmit={createCompany}>
+              <div className="form-grid-2">
+                <div>
+                  <label>Company / Brand Name *</label>
+                  <input required placeholder="e.g. LONGi Solar, Growatt, Huawei" value={newCompany.name} onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })} />
+                </div>
+                <div>
+                  <label>Country of Origin</label>
+                  <input placeholder="e.g. China, Germany, USA" value={newCompany.country} onChange={(e) => setNewCompany({ ...newCompany, country: e.target.value })} />
+                </div>
+                <div>
+                  <label>Official Website</label>
+                  <input placeholder="https://..." value={newCompany.website} onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })} />
+                </div>
+                <div>
+                  <label>Contact Information / Support</label>
+                  <input placeholder="e.g. bd-support@company.com" value={newCompany.contactInformation} onChange={(e) => setNewCompany({ ...newCompany, contactInformation: e.target.value })} />
+                </div>
+                <div>
+                  <label>Logo Image URL</label>
+                  <input placeholder="https://..." value={newCompany.logo} onChange={(e) => setNewCompany({ ...newCompany, logo: e.target.value })} />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <select value={newCompany.status} onChange={(e) => setNewCompany({ ...newCompany, status: e.target.value })}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Company Overview & Reputation</label>
+                <textarea rows={2} placeholder="Tier-1 global manufacturer of high-efficiency monocrystalline solar panels..." value={newCompany.description} onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })} />
+              </div>
+              <div className="admin-modal-footer">
+                <button className="secondary-button" type="button" onClick={() => setShowCreateCompanyModal(false)}>Cancel</button>
+                <button className="primary-button" type="submit">Register Company</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Company */}
+      {editingCompany && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-card">
+            <div className="admin-modal-header">
+              <h3>Edit Company: {editingCompany.name}</h3>
+              <button className="text-button" onClick={() => setEditingCompany(null)}>✕</button>
+            </div>
+            <form onSubmit={updateCompany}>
+              <div className="form-grid-2">
+                <div>
+                  <label>Company / Brand Name *</label>
+                  <input required value={editingCompany.name} onChange={(e) => setEditingCompany({ ...editingCompany, name: e.target.value })} />
+                </div>
+                <div>
+                  <label>Country of Origin</label>
+                  <input value={editingCompany.country || ''} onChange={(e) => setEditingCompany({ ...editingCompany, country: e.target.value })} />
+                </div>
+                <div>
+                  <label>Official Website</label>
+                  <input value={editingCompany.website || ''} onChange={(e) => setEditingCompany({ ...editingCompany, website: e.target.value })} />
+                </div>
+                <div>
+                  <label>Contact Information</label>
+                  <input value={editingCompany.contactInformation || ''} onChange={(e) => setEditingCompany({ ...editingCompany, contactInformation: e.target.value })} />
+                </div>
+                <div>
+                  <label>Logo Image URL</label>
+                  <input value={editingCompany.logo || ''} onChange={(e) => setEditingCompany({ ...editingCompany, logo: e.target.value })} />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <select value={editingCompany.status || 'active'} onChange={(e) => setEditingCompany({ ...editingCompany, status: e.target.value })}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Company Overview</label>
+                <textarea rows={2} value={editingCompany.description || ''} onChange={(e) => setEditingCompany({ ...editingCompany, description: e.target.value })} />
+              </div>
+              <div className="admin-modal-footer">
+                <button className="secondary-button" type="button" onClick={() => setEditingCompany(null)}>Cancel</button>
+                <button className="primary-button" type="submit">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create Category */}
+      {showCreateCategoryModal && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-card">
+            <div className="admin-modal-header">
+              <h3>Add Equipment Category</h3>
+              <button className="text-button" onClick={() => setShowCreateCategoryModal(false)}>✕</button>
+            </div>
+            <form onSubmit={createCategory}>
+              <div className="form-grid-2">
+                <div>
+                  <label>Category Name *</label>
+                  <input required placeholder="e.g. Solar Panel, Wind Turbine" value={newCategory.name} onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })} />
+                </div>
+                <div>
+                  <label>URL Slug (Optional)</label>
+                  <input placeholder="e.g. solar-panel (auto if blank)" value={newCategory.slug} onChange={(e) => setNewCategory({ ...newCategory, slug: e.target.value })} />
+                </div>
+                <div>
+                  <label>Category Icon (Emoji or SVG)</label>
+                  <input placeholder="☀️, 🌬️, 🔋, ⚡, 🏗️" value={newCategory.icon} onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })} />
+                </div>
+                <div>
+                  <label>Banner / Header Image URL</label>
+                  <input placeholder="https://..." value={newCategory.image} onChange={(e) => setNewCategory({ ...newCategory, image: e.target.value })} />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <select value={newCategory.status} onChange={(e) => setNewCategory({ ...newCategory, status: e.target.value })}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Category Description</label>
+                <textarea rows={2} placeholder="High-efficiency photovoltaic modules designed for residential, commercial..." value={newCategory.description} onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })} />
+              </div>
+              <div className="admin-modal-footer">
+                <button className="secondary-button" type="button" onClick={() => setShowCreateCategoryModal(false)}>Cancel</button>
+                <button className="primary-button" type="submit">Create Category</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Category */}
+      {editingCategory && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-card">
+            <div className="admin-modal-header">
+              <h3>Edit Category: {editingCategory.name}</h3>
+              <button className="text-button" onClick={() => setEditingCategory(null)}>✕</button>
+            </div>
+            <form onSubmit={updateCategory}>
+              <div className="form-grid-2">
+                <div>
+                  <label>Category Name *</label>
+                  <input required value={editingCategory.name} onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })} />
+                </div>
+                <div>
+                  <label>URL Slug</label>
+                  <input required value={editingCategory.slug} onChange={(e) => setEditingCategory({ ...editingCategory, slug: e.target.value })} />
+                </div>
+                <div>
+                  <label>Category Icon</label>
+                  <input value={editingCategory.icon || ''} onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })} />
+                </div>
+                <div>
+                  <label>Image URL</label>
+                  <input value={editingCategory.image || ''} onChange={(e) => setEditingCategory({ ...editingCategory, image: e.target.value })} />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <select value={editingCategory.status || 'active'} onChange={(e) => setEditingCategory({ ...editingCategory, status: e.target.value })}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px' }}>
+                <label>Description</label>
+                <textarea rows={2} value={editingCategory.description || ''} onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })} />
+              </div>
+              <div className="admin-modal-footer">
+                <button className="secondary-button" type="button" onClick={() => setEditingCategory(null)}>Cancel</button>
                 <button className="primary-button" type="submit">Save Changes</button>
               </div>
             </form>
