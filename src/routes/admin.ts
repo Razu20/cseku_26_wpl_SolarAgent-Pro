@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from '../lib/router';
 import { z } from 'zod';
-import { asc, desc, eq, ilike, or } from 'drizzle-orm';
+import { asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   adminSettings,
@@ -241,6 +241,21 @@ adminRoutes.patch('/admin/orders/:id', async (req, res) => {
     if (status && !canTransitionOrderStatus(current.status, status)) {
       return res.status(409).json({ error: 'invalid_order_status_transition', from: current.status, to: status });
     }
+    if (
+      technicianId &&
+      technicianId !== current.technicianId &&
+      status !== 'completed' &&
+      status !== 'cancelled'
+    ) {
+      const [existingAssignment] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(sql`${orders.technicianId} = ${technicianId} AND ${orders.id} != ${req.params.id} AND ${orders.status} NOT IN ('completed', 'cancelled')`)
+        .limit(1);
+      if (existingAssignment) {
+        return res.status(409).json({ error: 'technician_not_available', message: 'This technician is already assigned to an active service.' });
+      }
+    }
     const [updated] = await db
       .update(orders)
       .set({
@@ -321,6 +336,16 @@ adminRoutes.post('/admin/orders', async (req, res) => {
 
   const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`;
   try {
+    if (parsed.data.technicianId) {
+      const [existingAssignment] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(sql`${orders.technicianId} = ${parsed.data.technicianId} AND ${orders.status} NOT IN ('completed', 'cancelled')`)
+        .limit(1);
+      if (existingAssignment) {
+        return res.status(409).json({ error: 'technician_not_available', message: 'This technician is already assigned to an active service.' });
+      }
+    }
     const [newOrder] = await db.insert(orders).values({
       orderNumber,
       customerName: parsed.data.customerName,
@@ -392,10 +417,28 @@ adminRoutes.get('/admin/technicians', async (_req, res) => {
   try {
     const list = await db.select().from(technicians).orderBy(asc(technicians.name));
     const types = await db.select().from(technicianTypes);
+    const activeAssignments = await db
+      .select({ technicianId: orders.technicianId })
+      .from(orders)
+      .where(sql`${orders.technicianId} IS NOT NULL AND ${orders.status} NOT IN ('completed', 'cancelled')`);
+    const activeJobCounts = new Map<string, number>();
+    for (const assignment of activeAssignments) {
+      if (assignment.technicianId) {
+        activeJobCounts.set(
+          assignment.technicianId,
+          (activeJobCounts.get(assignment.technicianId) || 0) + 1,
+        );
+      }
+    }
     const typeMap = new Map(types.map((t) => [t.id, t]));
 
     const populated = list.map((tech) => ({
       ...tech,
+      activeJobs: activeJobCounts.get(tech.id) || 0,
+      availability:
+        activeJobCounts.has(tech.id) && tech.availability !== 'on_leave'
+          ? 'busy'
+          : tech.availability,
       technicianType: tech.technicianTypeId ? typeMap.get(tech.technicianTypeId) || null : null,
     }));
 
@@ -1068,7 +1111,5 @@ adminRoutes.patch('/admin/settings/:key', async (req, res) => {
     return res.status(500).json({ error: (error as Error).message });
   }
 });
-
-
 
 

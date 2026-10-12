@@ -2612,7 +2612,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   <label>Assign Technician</label>
                   <select value={newOrderForm.technicianId} onChange={(e) => setNewOrderForm({ ...newOrderForm, technicianId: e.target.value })}>
                     <option value="">-- No Technician --</option>
-                    {technicians.map((t) => (
+                    {technicians.filter((t) => t.active && t.availability === 'available').map((t) => (
                       <option key={t.id} value={t.id}>{t.name} ({t.serviceArea})</option>
                     ))}
                   </select>
@@ -2676,7 +2676,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
                   <label>Assigned Technician</label>
                   <select value={editingOrder.technicianId || ''} onChange={(e) => setEditingOrder({ ...editingOrder, technicianId: e.target.value })}>
                     <option value="">-- No Technician --</option>
-                    {technicians.map((t) => (
+                    {technicians.filter((t) => t.active && (t.availability === 'available' || t.id === editingOrder.technicianId)).map((t) => (
                       <option key={t.id} value={t.id}>{t.name} ({t.serviceArea})</option>
                     ))}
                   </select>
