@@ -18,6 +18,8 @@ import { seedMarketplace } from './seed-marketplace';
 async function seed() {
   console.log('Seeding SolarAgent Pro database with initial dataset...');
 
+  if (process.env.NODE_ENV === 'production') throw new Error('Demo seeding is disabled in production');
+
   // 1. Users
   await db.insert(users).values([
     {

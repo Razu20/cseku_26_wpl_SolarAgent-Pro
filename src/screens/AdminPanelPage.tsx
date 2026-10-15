@@ -415,7 +415,7 @@ export function AdminPanelPage({ section }: AdminPanelPageProps) {
         }
       }
     } catch (err) {
-      setMessage((err as Error).message || 'Failed to connect to backend.');
+      setMessage((err as Error).message || 'Could not reach the service. Please try again.');
     } finally {
       setLoading(false);
     }

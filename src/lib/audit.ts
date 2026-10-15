@@ -1,3 +1,5 @@
+import { db } from '../db/client';
+import { auditLog } from '../db/schema';
 export type AuditEvent = {
   actor: string;
   action: string;
@@ -7,13 +9,14 @@ export type AuditEvent = {
   timestamp: string;
 };
 
-export function createAuditEvent(
+export async function createAuditEvent(
   actor: string,
   action: string,
   entityType: string,
   entityId: string,
   details: Record<string, unknown> = {},
-): AuditEvent {
+): Promise<AuditEvent> {
+  await db.insert(auditLog).values({ actor, action, entityType, entityId, metadata: details });
   return {
     actor,
     action,

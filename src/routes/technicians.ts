@@ -162,6 +162,10 @@ technicianRoutes.post('/admin/assign-technician', requireAuth, requireRole(['adm
     const { orderId, technicianId, scheduledDate, scheduledSlot, notes } = parsed.data;
 
     const result = await db.transaction(async (tx) => {
+      const [currentOrder] = await tx.select().from(orders).where(eq(orders.id, orderId)).for('update');
+      if (!currentOrder) { const error = new Error('order_not_found'); error.name = 'OrderNotFound'; throw error; }
+      if (!canTransitionOrderStatus(currentOrder.status, 'assigned')) { const error = new Error('invalid_order_status_transition'); error.name = 'TechnicianScheduleConflict'; throw error; }
+      await tx.select().from(technicians).where(eq(technicians.id, technicianId)).for('update');
       const existingAssignments = await tx.select().from(technicianAssignments).where(
         and(
           eq(technicianAssignments.technicianId, technicianId),
@@ -188,6 +192,10 @@ technicianRoutes.post('/admin/assign-technician', requireAuth, requireRole(['adm
         throw error;
       }
 
+      const [existing] = await tx.select().from(technicianAssignments).where(and(eq(technicianAssignments.orderId, orderId), eq(technicianAssignments.technicianId, technicianId)));
+      if (existing && existing.scheduledDate === scheduledDate && existing.scheduledSlot === scheduledSlot && existing.status !== 'cancelled') return { assignment: existing, order: currentOrder, technician: tech };
+      await tx.update(technicianAssignments).set({ status: 'cancelled', updatedAt: new Date() }).where(eq(technicianAssignments.orderId, orderId));
+      if (currentOrder.technicianId && currentOrder.technicianId !== technicianId) await tx.update(technicians).set({ activeJobs: sql`GREATEST(0, ${technicians.activeJobs} - 1)` }).where(eq(technicians.id, currentOrder.technicianId));
       const [assignment] = await tx.insert(technicianAssignments).values({
         orderId,
         technicianId,
@@ -214,7 +222,7 @@ technicianRoutes.post('/admin/assign-technician', requireAuth, requireRole(['adm
       }
 
       const [updatedTech] = await tx.update(technicians).set({
-        activeJobs: (tech.activeJobs || 0) + 1,
+        activeJobs: (tech.activeJobs || 0) + (currentOrder.technicianId === technicianId ? 0 : 1),
         availability: 'busy',
         updatedAt: new Date(),
       }).where(eq(technicians.id, tech.id)).returning();
@@ -319,16 +327,14 @@ technicianRoutes.get('/technician/dashboard', requireAuth, requireRole(['technic
 // Technician Job Status Update (e.g. En Route -> Installation in progress -> Completed)
 technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireRole(['technician']), async (req: AuthenticatedRequest, res) => {
   try {
+    return await db.transaction(async (tx) => {
     const { orderId } = req.params;
     const { status, completionNotes } = req.body; // 'installation_in_progress' | 'completed'
 
-    const [order] = await db.select().from(orders).where(eq(orders.id, String(orderId)));
+    const [order] = await tx.select().from(orders).where(eq(orders.id, String(orderId))).for('update');
     if (!order) return res.status(404).json({ error: 'order_not_found' });
 
-    let [tech] = await db.select().from(technicians).where(eq(technicians.userId, req.user!.id));
-    if (!tech && order.technicianId) {
-      [tech] = await db.select().from(technicians).where(eq(technicians.id, order.technicianId));
-    }
+    let [tech] = await tx.select().from(technicians).where(eq(technicians.userId, req.user!.id));
     if (!tech || order.technicianId !== tech.id) {
       return res.status(403).json({ error: 'job_assignment_access_denied' });
     }
@@ -339,9 +345,10 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
       return res.status(409).json({ error: 'invalid_order_status_transition', from: order.status, to: status });
     }
 
+    if (order.status === status) return res.json({ success: true, message: 'Status already applied.' });
     if (status === 'completed') {
       // 1. Mark Order Completed
-      await db.update(orders).set({
+      await tx.update(orders).set({
         status: 'completed',
         installationStatus: 'completed',
         notes: completionNotes ? `${order.notes || ''}\n[Completion Note]: ${completionNotes}` : order.notes,
@@ -349,14 +356,14 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
       }).where(eq(orders.id, order.id));
 
       // 2. Mark Assignment Completed
-      await db.update(technicianAssignments).set({
+      await tx.update(technicianAssignments).set({
         status: 'completed',
         updatedAt: new Date(),
       }).where(eq(technicianAssignments.orderId, order.id));
 
       // 3. Update Technician Stats
       if (tech) {
-        await db.update(technicians).set({
+        await tx.update(technicians).set({
           completedJobs: (tech.completedJobs || 0) + 1,
           activeJobs: Math.max(0, (tech.activeJobs || 1) - 1),
           availability: (tech.activeJobs || 1) > 1 ? 'busy' : 'available',
@@ -365,7 +372,7 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
 
         // 4. Generate Technician Earning Record (e.g. 5,000 BDT or 5% of project amount)
         const commissionAmount = Math.max(5000, Math.round(Number(order.totalAmount) * 0.05));
-        await db.insert(technicianPayments).values({
+        await tx.insert(technicianPayments).values({
           technicianId: tech.id,
           orderId: order.id,
           amount: String(commissionAmount),
@@ -377,11 +384,11 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
       }
 
       // 5. Automatically Deduct Hardware Stock from Warehouse
-      await deductStockForInstallation(order.id);
+      await deductStockForInstallation(order.id, tx);
 
       // 6. Notify Customer & Admin
       if (order.userId) {
-        await db.insert(notifications).values({
+        await tx.insert(notifications).values({
           role: 'customer',
           userId: order.userId,
           title: `Installation Completed: Order #${order.orderNumber}`,
@@ -391,7 +398,7 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
         });
       }
 
-      await db.insert(notifications).values({
+      await tx.insert(notifications).values({
         role: 'admin',
         title: `Job Completed: Order #${order.orderNumber}`,
         message: `Technician ${tech?.name || 'Assigned Tech'} completed physical installation of Order #${order.orderNumber}. Hardware deducted from inventory.`,
@@ -402,24 +409,25 @@ technicianRoutes.patch('/technician/jobs/:orderId/status', requireAuth, requireR
       return res.json({ success: true, message: 'Installation successfully marked as completed!' });
     } else {
       // Ongoing status update (e.g. installation_in_progress)
-      await db.update(orders).set({
+      await tx.update(orders).set({
         status: status,
         installationStatus: status,
         updatedAt: new Date(),
       }).where(eq(orders.id, order.id));
 
-      await db.update(technicianAssignments).set({
+      await tx.update(technicianAssignments).set({
         status: status,
         updatedAt: new Date(),
       }).where(eq(technicianAssignments.orderId, order.id));
 
-      await db.update(technicians).set({
+      await tx.update(technicians).set({
         availability: 'busy',
         updatedAt: new Date(),
       }).where(eq(technicians.id, tech.id));
 
       return res.json({ success: true, message: `Status updated to ${status}`, technician: { id: tech.id, availability: 'busy' } });
     }
+    });
   } catch (err) {
     return res.status(500).json({ error: (err as Error).message });
   }

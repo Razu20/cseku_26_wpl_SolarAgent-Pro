@@ -20,6 +20,7 @@ import {
 } from '../db/schema';
 import { hashPassword } from '../lib/password';
 import { requireAuth, requireRole } from './auth';
+import { releaseStockForOrder, deductStockForInstallation } from './inventory';
 import { canTransitionOrderStatus } from '../lib/orderLifecycle';
 
 export const adminRoutes = new Router();
@@ -127,7 +128,7 @@ adminRoutes.patch('/admin/users/:id', async (req, res) => {
 
 const adminCreateUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6).default('password123'),
+  password: z.string().min(12).max(128),
   fullName: z.string().min(2),
   role: z.enum(['customer', 'admin']).default('customer'),
   contactNumber: z.string().min(7),
@@ -234,13 +235,23 @@ adminRoutes.get('/admin/orders/:id', async (req, res) => {
 });
 
 adminRoutes.patch('/admin/orders/:id', async (req, res) => {
-  const { status, technicianId, scheduledDate, paymentStatus, notes } = req.body;
+  const parsed = z.object({
+    status: z.enum(['submitted', 'awaiting_payment', 'paid', 'confirmed', 'site_survey_scheduled', 'assigned', 'in_progress', 'installation_in_progress', 'completed', 'cancelled', 'refunded']).optional(),
+    technicianId: z.union([z.string().uuid(), z.literal(''), z.null()]).optional(),
+    scheduledDate: z.string().max(40).nullable().optional(),
+    paymentStatus: z.enum(['pending', 'paid', 'verified', 'failed', 'refunded']).optional(),
+    notes: z.string().max(5000).nullable().optional(),
+  }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { status, technicianId, scheduledDate, paymentStatus, notes } = parsed.data;
   try {
-    const [current] = await db.select({ status: orders.status, technicianId: orders.technicianId }).from(orders).where(eq(orders.id, req.params.id));
+    return await db.transaction(async (tx) => {
+    const [current] = await tx.select({ status: orders.status, technicianId: orders.technicianId }).from(orders).where(eq(orders.id, req.params.id)).for('update');
     if (!current) return res.status(404).json({ error: 'order_not_found' });
     if (status && !canTransitionOrderStatus(current.status, status)) {
       return res.status(409).json({ error: 'invalid_order_status_transition', from: current.status, to: status });
     }
+    if (technicianId) await tx.select().from(technicians).where(eq(technicians.id, technicianId)).for('update');
     if (
       technicianId &&
       technicianId !== current.technicianId &&
@@ -273,9 +284,9 @@ adminRoutes.patch('/admin/orders/:id', async (req, res) => {
 
     if (technicianId !== undefined && technicianId !== current.technicianId) {
       if (current.technicianId) {
-        const [oldTech] = await db.select().from(technicians).where(eq(technicians.id, current.technicianId));
+        const [oldTech] = await tx.select().from(technicians).where(eq(technicians.id, current.technicianId));
         if (oldTech) {
-          await db.update(technicians).set({
+          await tx.update(technicians).set({
             activeJobs: Math.max(0, (oldTech.activeJobs || 1) - 1),
             availability: (oldTech.activeJobs || 1) > 1 ? 'busy' : 'available',
             updatedAt: new Date(),
@@ -283,19 +294,19 @@ adminRoutes.patch('/admin/orders/:id', async (req, res) => {
         }
       }
       if (technicianId) {
-        const [newTech] = await db.select().from(technicians).where(eq(technicians.id, technicianId));
+        const [newTech] = await tx.select().from(technicians).where(eq(technicians.id, technicianId));
         if (newTech) {
-          await db.update(technicians).set({
+          await tx.update(technicians).set({
             activeJobs: (newTech.activeJobs || 0) + 1,
             availability: 'busy',
             updatedAt: new Date(),
           }).where(eq(technicians.id, newTech.id));
         }
       }
-    } else if ((status === 'completed' || status === 'cancelled') && current.technicianId) {
-      const [tech] = await db.select().from(technicians).where(eq(technicians.id, current.technicianId));
+    } else if (status !== current.status && (status === 'completed' || status === 'cancelled') && current.technicianId) {
+      const [tech] = await tx.select().from(technicians).where(eq(technicians.id, current.technicianId));
       if (tech) {
-        await db.update(technicians).set({
+        await tx.update(technicians).set({
           activeJobs: Math.max(0, (tech.activeJobs || 1) - 1),
           ...(status === 'completed' ? { completedJobs: (tech.completedJobs || 0) + 1 } : {}),
           availability: (tech.activeJobs || 1) > 1 ? 'busy' : 'available',
@@ -304,7 +315,10 @@ adminRoutes.patch('/admin/orders/:id', async (req, res) => {
       }
     }
 
+    if (status !== current.status && status === 'cancelled') await releaseStockForOrder(updated.id, tx);
+    if (status !== current.status && status === 'completed') await deductStockForInstallation(updated.id, tx);
     return res.json({ order: updated });
+    });
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }

@@ -8,7 +8,8 @@ import { calculateRenewableProject } from '../services/renewableCalculation';
 import { fetchWeatherForLocation } from '../services/weather';
 import { reserveStockForOrder, releaseStockForOrder } from './inventory';
 import { canTransitionOrderStatus } from '../lib/orderLifecycle';
-import type { AuthenticatedRequest } from './auth';
+import { requireAuth, requireRole, type AuthenticatedRequest } from './auth';
+import { randomUUID } from 'node:crypto';
 
 export const renewableRoutes = new Router();
 
@@ -338,12 +339,12 @@ const requestCreationSchema = estimateSchema.extend({
   paymentMethod: z.enum(['sslcommerz', 'cod']).default('cod'),
 });
 
-renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
+renewableRoutes.post('/requests', requireAuth, async (req: AuthenticatedRequest, res) => {
   const parsed = requestCreationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
-    const requestUserId = parsed.data.userId || req.user?.id;
+    const requestUserId = req.user!.id;
     const calculationInput = {
       type: parsed.data.type,
       location: parsed.data.location,
@@ -373,8 +374,9 @@ renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
     // 1. Run full engineering calculation
     const estimate = await calculateRenewableProject(calculationInput);
 
-    // 2. Save projectRequest
-    const [request] = await db.insert(projectRequests).values({
+    const { request, order } = await db.transaction(async (tx) => {
+    // Save the request, appliance selections, and order atomically.
+    const [request] = await tx.insert(projectRequests).values({
       userId: requestUserId,
       type: parsed.data.type,
       status: 'submitted',
@@ -388,23 +390,23 @@ renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
     // 3. Save appliances selected
     const validAppliances = parsed.data.appliances.filter((a) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(a.applianceId));
     if (validAppliances.length > 0) {
-      await db.insert(projectRequestAppliances).values(
+      await tx.insert(projectRequestAppliances).values(
         validAppliances.map((s) => ({
           projectRequestId: request.id,
           applianceId: s.applianceId,
           quantity: s.quantity,
           dailyHours: String(s.dailyHours),
         }))
-      ).catch(() => null);
+      );
     }
 
     // 4. Generate Order Record
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const orderNumber = `ORD-${randomUUID().toUpperCase()}`;
     // Both payment methods require review before work begins. Keeping the order
     // in this state from creation avoids a second client request for COD orders.
     const initialStatus = 'awaiting_payment';
 
-    const [order] = await db.insert(orders).values({
+    const [order] = await tx.insert(orders).values({
       orderNumber,
       userId: requestUserId,
       projectRequestId: request.id,
@@ -429,31 +431,24 @@ renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
       paymentStatus: 'pending',
     }).returning();
 
-    // 5. Automatically Reserve Hardware Stock in Inventory
     const itemsToReserve: Array<{ productId: string; quantity: number }> = [];
-    const panelCount = (estimate.systemSizing as any)?.panelCount || 0;
-    if (parsed.data.selectedPanelId && panelCount > 0) {
-      itemsToReserve.push({ productId: parsed.data.selectedPanelId, quantity: panelCount });
+    for (const [key, quantity] of [
+      ['panel', estimate.systemSizing.panelCount],
+      ['inverter', 1],
+      ['battery', estimate.systemSizing.batteryCount],
+      ['turbine', estimate.systemSizing.windTurbineCount],
+    ] as const) {
+      const product = estimate.selectedProducts[key];
+      if (product?.id && quantity > 0) itemsToReserve.push({ productId: product.id, quantity });
     }
-    if (parsed.data.selectedInverterId) {
-      itemsToReserve.push({ productId: parsed.data.selectedInverterId, quantity: 1 });
-    }
-    const batteryCount = (estimate.systemSizing as any)?.batteryCount || (estimate.systemSizing as any)?.numberOfBatteries || 1;
-    if (parsed.data.selectedBatteryId) {
-      itemsToReserve.push({ productId: parsed.data.selectedBatteryId, quantity: batteryCount });
-    }
-    if (parsed.data.selectedTurbineId) {
-      itemsToReserve.push({ productId: parsed.data.selectedTurbineId, quantity: 1 });
-    }
-    if (itemsToReserve.length > 0) {
-      void reserveStockForOrder(order.id, itemsToReserve).catch((err) => console.warn('Stock reservation notice:', err.message));
-    }
+    await reserveStockForOrder(order.id, itemsToReserve, tx);
+    return { request, order };
+    });
 
-    // 6. Notifications
     try {
       await db.insert(notifications).values({
         role: 'admin',
-        title: `New Order Placed: #${orderNumber}`,
+        title: `New Order Placed: #${order.orderNumber}`,
         message: `${parsed.data.customerName} submitted a ${parsed.data.type.toUpperCase()} project order (BDT ${Number(estimate.pricing.finalTotal).toLocaleString()}) in ${parsed.data.location.district}.`,
         type: 'order',
         link: '/admin/orders',
@@ -463,26 +458,27 @@ renewableRoutes.post('/requests', async (req: AuthenticatedRequest, res) => {
         await db.insert(notifications).values({
           role: 'customer',
           userId: requestUserId,
-          title: `Order Confirmed: #${orderNumber}`,
+          title: `Order Confirmed: #${order.orderNumber}`,
           message: `Your project request has been logged. Our engineering dispatch team will verify site details shortly.`,
           type: 'order',
           link: '/customer',
         });
       }
     } catch (notificationError) {
-      console.error('Project notification creation failed after order submission:', notificationError);
+      console.error('Project notification creation failed after order submission');
     }
 
     return res.status(201).json({ request, order, estimate, message: 'Project request submitted successfully.' });
   } catch (error) {
-    console.error('Request creation error:', error);
+    if ((error as Error).message === 'insufficient_stock') return res.status(409).json({ error: 'insufficient_stock', message: 'Some equipment is no longer available. Please update your configuration.' });
+    console.error('Request creation failed');
     return res.status(500).json({ error: (error as Error).message || 'request_creation_failed' });
   }
 });
 
 // 7. Get Customer Orders / Project Requests
-renewableRoutes.get('/orders', async (req, res) => {
-  const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined;
+renewableRoutes.get('/orders', requireAuth, async (req, res) => {
+  const userId = req.user!.role === 'admin' ? (typeof req.query.userId === 'string' ? req.query.userId : undefined) : req.user!.id;
   try {
     const list = userId
       ? await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt))
@@ -494,13 +490,13 @@ renewableRoutes.get('/orders', async (req, res) => {
 });
 
 // 8. Public Order Tracking (no auth required)
-renewableRoutes.get('/orders/track/:orderNumber', async (req, res) => {
+renewableRoutes.get('/orders/track/:orderNumber', requireAuth, async (req, res) => {
   try {
     const { orderNumber } = req.params;
     const [order] = await db.select().from(orders).where(
       or(
         eq(orders.orderNumber, orderNumber.trim()),
-        eq(orders.id, orderNumber.trim())
+        ...(/^[0-9a-f-]{36}$/i.test(orderNumber.trim()) ? [eq(orders.id, orderNumber.trim())] : [])
       )
     );
 
@@ -508,6 +504,7 @@ renewableRoutes.get('/orders/track/:orderNumber', async (req, res) => {
       return res.status(404).json({ error: 'order_not_found', message: `No project order found matching reference ${orderNumber}` });
     }
 
+    if (req.user!.role !== 'admin' && order.userId !== req.user!.id) return res.status(403).json({ error: 'order_access_denied' });
     return res.json({
       orderNumber: order.orderNumber,
       projectType: order.projectType,
@@ -529,13 +526,15 @@ renewableRoutes.get('/orders/track/:orderNumber', async (req, res) => {
 });
 
 // 9. Cancel Order with Business Policy Enforcement & Stock Release
-renewableRoutes.post('/orders/:id/cancel', async (req, res) => {
+renewableRoutes.post('/orders/:id/cancel', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason, cancelledBy } = req.body;
 
-    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    const cancelledOrder = await db.transaction(async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, id)).for('update');
     if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (req.user!.role !== 'admin' && order.userId !== req.user!.id) return res.status(403).json({ error: 'order_access_denied' });
 
     // Cancellation policy check
     const nonCancellableStatuses = ['completed', 'installation_in_progress'];
@@ -554,19 +553,24 @@ renewableRoutes.post('/orders/:id/cancel', async (req, res) => {
     }
 
     // 1. Update order
-    const [cancelledOrder] = await db.update(orders).set({
+    const [cancelledOrder] = await tx.update(orders).set({
       status: 'cancelled',
       installationStatus: 'cancelled',
       cancellationReason: reason || 'Customer requested cancellation',
       cancelledAt: new Date(),
-      cancelledBy: cancelledBy || 'customer',
+      cancelledBy: req.user!.id,
       updatedAt: new Date(),
     }).where(eq(orders.id, order.id)).returning();
 
     // 2. Release Reserved Inventory Stock
-    await releaseStockForOrder(order.id);
+    await releaseStockForOrder(order.id, tx);
+    return cancelledOrder;
+    });
+    if (res.response) return res;
+    const order = cancelledOrder;
 
-    // 3. Notify Admin & Customer
+    // Notification failures must not turn a committed cancellation into an error.
+    try {
     await db.insert(notifications).values({
       role: 'admin',
       title: `Order Cancelled: #${order.orderNumber}`,
@@ -586,6 +590,8 @@ renewableRoutes.post('/orders/:id/cancel', async (req, res) => {
       });
     }
 
+    } catch { console.warn('Cancellation notification delivery failed'); }
+
     return res.json({
       success: true,
       message: 'Order successfully cancelled and inventory reservation released.',
@@ -597,36 +603,30 @@ renewableRoutes.post('/orders/:id/cancel', async (req, res) => {
 });
 
 // 10. Get Single Order Details with Installation Document & BOM
-renewableRoutes.get('/orders/:id', async (req, res) => {
+renewableRoutes.get('/orders/:id', requireAuth, async (req, res) => {
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, req.params.id));
     if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (req.user!.role !== 'admin' && order.userId !== req.user!.id) return res.status(403).json({ error: 'order_access_denied' });
     return res.json({ order });
   } catch {
     return res.status(503).json({ error: 'database_unavailable' });
   }
 });
 
-// 11. Update order
-renewableRoutes.patch('/orders/:id', async (req, res) => {
-  try {
-    const [updated] = await db.update(orders).set({ ...req.body, updatedAt: new Date() }).where(eq(orders.id, req.params.id)).returning();
-    return updated ? res.json({ order: updated }) : res.status(404).json({ error: 'order_not_found' });
-  } catch (error) {
-    return res.status(500).json({ error: (error as Error).message });
-  }
-});
+// Order state changes use the validated administration workflow.
+renewableRoutes.patch('/orders/:id', requireAuth, requireRole(['admin']), (_req, res) =>
+  res.status(405).json({ error: 'use_admin_order_workflow' }));
 
 // 12. Save Quotation / Project Proposal
-renewableRoutes.post('/quotes/save', async (req, res) => {
+renewableRoutes.post('/quotes/save', requireAuth, async (req, res) => {
   try {
-    const { userId, type, location, configuration, estimate } = req.body;
-    if (!type || !estimate) {
-      return res.status(400).json({ error: 'missing_required_quote_data' });
-    }
-
+    const parsed = estimateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const { type, location, configuration } = parsed.data;
+    const estimate = await calculateRenewableProject(parsed.data);
     const [savedRequest] = await db.insert(projectRequests).values({
-      userId: userId || undefined,
+      userId: req.user!.id,
       type: type,
       status: 'saved_quotation',
       configuration: { location, configuration },

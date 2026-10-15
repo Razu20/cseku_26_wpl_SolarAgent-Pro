@@ -206,121 +206,67 @@ inventoryRoutes.get('/inventory/movements', async (_req, res) => {
 // ==========================================
 // 4. AUTOMATED STOCK RESERVATION & DEDUCTION HELPERS
 // ==========================================
-export async function reserveStockForOrder(orderId: string, productQuantities: Array<{ productId: string; quantity: number }>) {
-  for (const item of productQuantities) {
-    const [inv] = await db.select().from(inventoryItems).where(eq(inventoryItems.productId, item.productId));
-    if (inv) {
-      const prevQty = inv.quantity;
-      const newReserved = inv.reservedQuantity + item.quantity;
-      const newAvailable = Math.max(0, inv.quantity - newReserved);
+type StockTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-      await db.update(inventoryItems).set({
-        reservedQuantity: newReserved,
-        availableQuantity: newAvailable,
-        updatedAt: new Date(),
-      }).where(eq(inventoryItems.id, inv.id));
-
-      await db.insert(stockMovements).values({
-        inventoryItemId: inv.id,
-        productId: item.productId,
-        warehouseId: inv.warehouseId || undefined,
-        type: 'order_reservation',
-        quantity: item.quantity,
-        previousStock: prevQty,
-        newStock: inv.quantity,
-        referenceType: 'order',
-        referenceId: orderId,
-        notes: `Stock reserved for confirmed Order #${orderId}`,
-        actorName: 'Order Engine',
-      });
+export async function reserveStockForOrder(orderId: string, productQuantities: Array<{ productId: string; quantity: number }>, transaction?: StockTransaction) {
+  const reserve = async (tx: StockTransaction) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for('update');
+    if (!order || order.status === 'cancelled') return;
+    const existing = await tx.select().from(stockMovements).where(eq(stockMovements.referenceId, orderId));
+    const quantities = new Map<string, number>();
+    for (const item of productQuantities) {
+      if (!Number.isInteger(item.quantity) || item.quantity <= 0) throw new Error('invalid_stock_quantity');
+      quantities.set(item.productId, (quantities.get(item.productId) || 0) + item.quantity);
     }
-  }
+    for (const [productId, quantity] of [...quantities].sort(([a], [b]) => a.localeCompare(b))) {
+      if (existing.some((m) => m.type === 'order_reservation' && m.productId === productId)) continue;
+      const rows = await tx.select().from(inventoryItems).where(eq(inventoryItems.productId, productId)).orderBy(inventoryItems.id).for('update');
+      // Products without warehouse records require manual procurement review.
+      if (!rows.length) continue;
+      if (rows.reduce((sum, inv) => sum + inv.quantity - inv.reservedQuantity - inv.damagedQuantity, 0) < quantity) throw new Error('insufficient_stock');
+      let remaining = quantity;
+      for (const inv of rows) {
+        const available = Math.max(0, inv.quantity - inv.reservedQuantity - inv.damagedQuantity);
+        const take = Math.min(remaining, available);
+        if (!take) continue;
+        await tx.update(inventoryItems).set({ reservedQuantity: inv.reservedQuantity + take, availableQuantity: available - take, updatedAt: new Date() }).where(eq(inventoryItems.id, inv.id));
+        await tx.insert(stockMovements).values({ inventoryItemId: inv.id, productId, warehouseId: inv.warehouseId, type: 'order_reservation', quantity: take, previousStock: inv.quantity, newStock: inv.quantity, referenceType: 'order', referenceId: orderId, actorName: 'Order Engine' });
+        remaining -= take;
+        if (!remaining) break;
+      }
+    }
+  };
+  return transaction ? reserve(transaction) : db.transaction(reserve);
 }
 
-export async function releaseStockForOrder(orderId: string) {
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
-  if (!order) return;
-
-  const movements = await db.select().from(stockMovements)
-    .where(eq(stockMovements.referenceId, orderId));
-  const reservationMovements = movements.filter((m) => m.type === 'order_reservation');
-
-  for (const m of reservationMovements) {
-    const [inv] = await db.select().from(inventoryItems).where(eq(inventoryItems.productId, m.productId));
-    if (inv) {
-      const newReserved = Math.max(0, inv.reservedQuantity - m.quantity);
-      const newAvailable = Math.max(0, inv.quantity - newReserved);
-
-      await db.update(inventoryItems).set({
-        reservedQuantity: newReserved,
-        availableQuantity: newAvailable,
-        updatedAt: new Date(),
-      }).where(eq(inventoryItems.id, inv.id));
-
-      await db.insert(stockMovements).values({
-        inventoryItemId: inv.id,
-        productId: m.productId,
-        warehouseId: inv.warehouseId || undefined,
-        type: 'order_release',
-        quantity: m.quantity,
-        previousStock: inv.quantity,
-        newStock: inv.quantity,
-        referenceType: 'order_cancellation',
-        referenceId: orderId,
-        notes: `Reserved stock released due to order cancellation for Order #${order.orderNumber}`,
-        actorName: 'Order Engine',
-      });
+async function settleStock(orderId: string, mode: 'order_release' | 'installation_deducted', transaction?: StockTransaction) {
+  const settle = async (tx: StockTransaction) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for('update');
+    if (!order) return;
+    const movements = await tx.select().from(stockMovements).where(eq(stockMovements.referenceId, orderId));
+    for (const reservation of movements.filter((m) => m.type === 'order_reservation')) {
+      if (movements.some((m) => m.inventoryItemId === reservation.inventoryItemId && ['order_release', 'installation_deducted'].includes(m.type))) continue;
+      const [inv] = await tx.select().from(inventoryItems).where(eq(inventoryItems.id, reservation.inventoryItemId!)).for('update');
+      if (!inv) continue;
+      const quantity = mode === 'installation_deducted' ? inv.quantity - reservation.quantity : inv.quantity;
+      const reserved = inv.reservedQuantity - reservation.quantity;
+      if (quantity < 0 || reserved < 0) throw new Error('inventory_reconciliation_required');
+      await tx.update(inventoryItems).set({ quantity, reservedQuantity: reserved, availableQuantity: Math.max(0, quantity - reserved - inv.damagedQuantity), status: quantity > 0 ? 'available' : 'out_of_stock', updatedAt: new Date() }).where(eq(inventoryItems.id, inv.id));
+      if (mode === 'installation_deducted') {
+        const [product] = await tx.select().from(productCatalog).where(eq(productCatalog.id, reservation.productId)).for('update');
+        if (product) {
+          const stock = Math.max(0, product.stock - reservation.quantity);
+          await tx.update(productCatalog).set({ stock, availability: stock > 0 ? 'in_stock' : 'out_of_stock', updatedAt: new Date() }).where(eq(productCatalog.id, product.id));
+        }
+      }
+      await tx.insert(stockMovements).values({ inventoryItemId: inv.id, productId: reservation.productId, warehouseId: inv.warehouseId, type: mode, quantity: reservation.quantity, previousStock: inv.quantity, newStock: quantity, referenceType: mode === 'order_release' ? 'order_cancellation' : 'installation_completion', referenceId: orderId, actorName: 'Order Engine' });
     }
-  }
+  };
+  return transaction ? settle(transaction) : db.transaction(settle);
 }
-
-export async function deductStockForInstallation(orderId: string) {
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
-  if (!order) return;
-
-  const movements = await db.select().from(stockMovements)
-    .where(eq(stockMovements.referenceId, orderId));
-  const reservationMovements = movements.filter((m) => m.type === 'order_reservation');
-
-  for (const m of reservationMovements) {
-    const [inv] = await db.select().from(inventoryItems).where(eq(inventoryItems.productId, m.productId));
-    if (inv) {
-      const prevQty = inv.quantity;
-      const newQty = Math.max(0, inv.quantity - m.quantity);
-      const newReserved = Math.max(0, inv.reservedQuantity - m.quantity);
-      const newAvailable = Math.max(0, newQty - newReserved);
-
-      await db.update(inventoryItems).set({
-        quantity: newQty,
-        reservedQuantity: newReserved,
-        availableQuantity: newAvailable,
-        status: newQty > 0 ? 'available' : 'out_of_stock',
-        updatedAt: new Date(),
-      }).where(eq(inventoryItems.id, inv.id));
-
-      await db.update(productCatalog).set({
-        stock: newQty,
-        availability: newQty > 0 ? 'in_stock' : 'out_of_stock',
-        updatedAt: new Date(),
-      }).where(eq(productCatalog.id, m.productId));
-
-      await db.insert(stockMovements).values({
-        inventoryItemId: inv.id,
-        productId: m.productId,
-        warehouseId: inv.warehouseId || undefined,
-        type: 'installation_deducted',
-        quantity: m.quantity,
-        previousStock: prevQty,
-        newStock: newQty,
-        referenceType: 'installation_completion',
-        referenceId: orderId,
-        notes: `Physically installed and commissioned at customer site for Order #${order.orderNumber}`,
-        actorName: 'Technician Dispatch',
-      });
-    }
-  }
+export async function releaseStockForOrder(orderId: string, transaction?: StockTransaction) {
+  return settleStock(orderId, 'order_release', transaction);
 }
-
-
-
-
+export async function deductStockForInstallation(orderId: string, transaction?: StockTransaction) {
+  return settleStock(orderId, 'installation_deducted', transaction);
+}

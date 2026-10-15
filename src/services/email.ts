@@ -1,3 +1,4 @@
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 export interface OrderEmailData {
   orderNumber: string;
   customerName: string;
@@ -19,6 +20,8 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
 
   const subject = `Order Confirmed: ${data.orderNumber} - ${data.projectType.toUpperCase()} Renewable Energy System`;
 
+  const recipient = data.customerEmail;
+  data = { ...data, customerName: escapeHtml(data.customerName), customerEmail: escapeHtml(data.customerEmail), orderNumber: escapeHtml(data.orderNumber), district: escapeHtml(data.district), division: escapeHtml(data.division) };
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -97,24 +100,20 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
   `;
 
   if (!apiKey) {
-    console.log(`[RESEND EMAIL SIMULATION] No RESEND_API_KEY configured. Email prepared for ${data.customerEmail}:`, {
-      subject,
-      orderNumber: data.orderNumber,
-      amount: data.totalAmount,
-    });
-    return { success: true, id: `mock-email-${Date.now()}` };
+    return { success: false, error: 'email_provider_not_configured' };
   }
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
+      signal: AbortSignal.timeout(10_000),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         from: fromEmail,
-        to: [data.customerEmail],
+        to: [recipient],
         subject,
         html: htmlContent,
       }),
@@ -134,3 +133,18 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
   }
 }
 
+
+export async function sendPasswordResetEmail(email: string, token: string): Promise<{ success: boolean }> {
+  const appUrl = process.env.APP_URL;
+  if (!appUrl || !process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return { success: false };
+  const link = new URL('/reset-password', appUrl);
+  link.hash = `token=${token}`;
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST', signal: AbortSignal.timeout(10_000),
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: process.env.EMAIL_FROM, to: [email], subject: 'Reset your SolarAgent Pro password', html: `<p>Use this link to reset your password within 30 minutes.</p><p><a href="${escapeHtml(link.toString())}">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>` }),
+    });
+    return { success: response.ok };
+  } catch { return { success: false }; }
+}

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import { calculateLoad, calculateSolarDesign } from './engineering';
 
 describe('deterministic engineering calculations', () => {
@@ -13,8 +14,8 @@ describe('deterministic engineering calculations', () => {
       backupHours: 6,
     });
 
-    expect(result.result.recommendedBatteryKwh).toBe(4.5);
-    expect(result.formulaVersion).toBe('1.4.0');
+    assert.equal(result.result.recommendedBatteryKwh, 4.5);
+    assert.equal(result.formulaVersion, '1.4.0');
   });
 
   it('calculates solar design deterministically', () => {
@@ -28,9 +29,9 @@ describe('deterministic engineering calculations', () => {
       backupHours: 6,
     });
 
-    expect(result.result.pvKwp).toBeGreaterThan(0);
-    expect(result.result.modules).toBeGreaterThan(0);
-    expect(result.traceId).toMatch(/^ENG-/);
+    assert.ok(result.result.pvKwp > 0);
+    assert.ok(result.result.modules > 0);
+    assert.match(result.traceId, /^ENG-/);
   });
 });
 

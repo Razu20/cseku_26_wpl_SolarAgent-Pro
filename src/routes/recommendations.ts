@@ -15,7 +15,7 @@ const intakeSchema = z.object({
   wantsBattery: z.boolean().default(true),
 });
 
-recommendationRoutes.post('/intake', (req, res) => {
+recommendationRoutes.post('/intake', async (req, res) => {
   const parsed = intakeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
@@ -34,7 +34,7 @@ recommendationRoutes.post('/intake', (req, res) => {
     ],
   };
 
-  const audit = createAuditEvent('ai_agent', 'recommendation_case_created', 'recommendation_case', caseId, { objective: parsed.data.objective });
+  const audit = await createAuditEvent('ai_agent', 'recommendation_case_created', 'recommendation_case', caseId, { objective: parsed.data.objective });
   res.status(201).json({ recommendation: rec, audit });
 });
 
@@ -134,7 +134,7 @@ recommendationRoutes.post('/:id/what-if', (req, res) => {
   });
 });
 
-recommendationRoutes.post('/:id/select', (req, res) => {
+recommendationRoutes.post('/:id/select', async (req, res) => {
   const body = z.object({ packageId: z.string(), userId: z.string().optional() }).safeParse(req.body);
   if (!body.success) {
     return res.status(400).json({ error: body.error.flatten() });
@@ -144,7 +144,7 @@ recommendationRoutes.post('/:id/select', (req, res) => {
     return res.status(403).json({ error: 'forbidden' });
   }
 
-  const audit = createAuditEvent('ai_agent', 'package_selected', 'recommendation_case', req.params.id, { packageId: body.data.packageId });
+  const audit = await createAuditEvent('ai_agent', 'package_selected', 'recommendation_case', req.params.id, { packageId: body.data.packageId });
   res.json({ selected: body.data.packageId, audit });
 });
 

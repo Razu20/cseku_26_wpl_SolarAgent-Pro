@@ -1,21 +1,27 @@
 // @ts-nocheck
 import { Router, Request, Response, NextFunction } from '../lib/router';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { db } from '../db/client';
-import { users, technicians, companies } from '../db/schema';
+import { users, technicians, companies, passwordResetTokens } from '../db/schema';
+import { sendPasswordResetEmail } from '../services/email';
 import { hashPassword, verifyPassword } from '../lib/password';
 
 export const authRoutes = new Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'solaragent-super-secret-key-32-chars-minimum-needed';
+function jwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) throw new Error('JWT_SECRET must contain at least 32 characters');
+  return secret;
+}
 
 export interface AuthUserPayload {
   id: string;
   email: string;
   role: 'admin' | 'customer' | 'technician' | 'supplier';
   exp?: number;
+  credentialVersion?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -26,7 +32,7 @@ export function signToken(payload: AuthUserPayload): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7; // 7 days
   const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
-  const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  const signature = crypto.createHmac('sha256', jwtSecret()).update(`${header}.${body}`).digest('base64url');
   return `${header}.${body}.${signature}`;
 }
 
@@ -36,11 +42,16 @@ export function verifyToken(token: string): AuthUserPayload | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [header, body, signature] = parts;
-  const expectedSignature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
-  if (signature !== expectedSignature) return null;
+  const expectedSignature = crypto.createHmac('sha256', jwtSecret()).update(`${header}.${body}`).digest('base64url');
+  const actual = Buffer.from(signature);
+  const expected = Buffer.from(expectedSignature);
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    const metadata = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
+    if (metadata.alg !== 'HS256' || metadata.typ !== 'JWT') return null;
+    if (!Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (!z.string().uuid().safeParse(payload.id).success || !z.string().email().safeParse(payload.email).success || !['admin', 'customer', 'technician', 'supplier'].includes(payload.role)) return null;
     return payload;
   } catch {
     return null;
@@ -48,17 +59,19 @@ export function verifyToken(token: string): AuthUserPayload | null {
 }
 
 // Middleware: Authenticate Bearer token
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
 
   const payload = verifyToken(token);
   if (!payload) {
     return res.status(401).json({ error: 'unauthorized', message: 'Authentication required' });
   }
 
+  const [account] = await db.select({ id: users.id, role: users.role, isActive: users.isActive, passwordHash: users.passwordHash }).from(users).where(eq(users.id, payload.id));
+  if (!account?.isActive || account.role !== payload.role || payload.credentialVersion !== crypto.createHash('sha256').update(account.passwordHash).digest('hex')) return res.status(401).json({ error: 'unauthorized' });
   req.user = payload;
-  next();
+  return next();
 }
 
 // Middleware: Require specific role(s)
@@ -78,8 +91,8 @@ export function requireRole(allowedRoles: Array<'admin' | 'customer' | 'technici
 }
 
 const credentials = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+  email: z.string().trim().toLowerCase().email().max(254),
+  password: z.string().min(8).max(128),
 });
 
 const loginCredentials = credentials.extend({
@@ -98,7 +111,7 @@ const registration = credentials.extend({
   // Additional technician fields
   serviceArea: z.string().optional(),
   skills: z.array(z.string()).optional(),
-  experienceYears: z.number().optional(),
+  experienceYears: z.number().int().min(0).max(70).optional(),
   // Additional supplier fields
   companyName: z.string().optional(),
   companyWebsite: z.string().optional(),
@@ -118,7 +131,7 @@ authRoutes.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'account_deactivated_contact_support' });
     }
 
-    const token = signToken({ id: user.id, email: user.email, role: user.role as any });
+    const token = signToken({ id: user.id, email: user.email, role: user.role as any, credentialVersion: crypto.createHash('sha256').update(user.passwordHash).digest('hex') });
     return res.json({
       token,
       user: {
@@ -145,10 +158,12 @@ authRoutes.post('/signup', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
+    jwtSecret();
     const targetRole = parsed.data.role || 'customer';
     const email = parsed.data.email.trim().toLowerCase();
 
-    const [user] = await db.insert(users).values({
+    const user = await db.transaction(async (tx) => {
+    const [user] = await tx.insert(users).values({
       email,
       passwordHash: hashPassword(parsed.data.password),
       role: targetRole,
@@ -162,7 +177,7 @@ authRoutes.post('/signup', async (req, res) => {
 
     // If role is technician, automatically register technician profile
     if (targetRole === 'technician') {
-      await db.insert(technicians).values({
+      await tx.insert(technicians).values({
         userId: user.id,
         name: parsed.data.fullName,
         email,
@@ -173,30 +188,33 @@ authRoutes.post('/signup', async (req, res) => {
         village: parsed.data.village,
         serviceArea: parsed.data.serviceArea || `${parsed.data.division} Division`,
         skills: parsed.data.skills || ['Solar PV Installation', 'Inverter Wiring', 'Battery Commissioning'],
-        experienceYears: parsed.data.experienceYears || 2,
-        rating: '4.80',
-        active: true,
-        availability: 'available',
+        experienceYears: parsed.data.experienceYears || 0,
+        rating: '0.00',
+        active: false,
+        availability: 'pending_verification',
       }).onConflictDoNothing();
     }
 
     // If role is supplier, automatically register company profile
     if (targetRole === 'supplier') {
-      await db.insert(companies).values({
+      await tx.insert(companies).values({
         name: parsed.data.companyName || parsed.data.fullName,
         description: `Registered renewable energy equipment supplier based in ${parsed.data.district}, ${parsed.data.division}.`,
         website: parsed.data.companyWebsite || '',
         country: 'Bangladesh',
         contactInformation: `${parsed.data.contactNumber} / ${email}`,
         status: 'active',
-        verified: true,
+        verified: false,
         leadTimeDays: 7,
         minOrderQuantity: 5,
         rating: '4.85',
       }).onConflictDoNothing();
     }
 
-    const token = signToken({ id: user.id, email: user.email, role: user.role as any });
+    return user;
+    });
+
+    const token = signToken({ id: user.id, email: user.email, role: user.role as any, credentialVersion: crypto.createHash('sha256').update(user.passwordHash).digest('hex') });
     return res.status(201).json({
       token,
       user: {
@@ -214,19 +232,18 @@ authRoutes.post('/signup', async (req, res) => {
       message: `Account created successfully. Welcome to SolarAgent Pro as a ${user.role}!`,
     });
   } catch (error: unknown) {
-    const code = (error as { code?: string }).code;
+    const code = (error as any)?.cause?.code || (error as any)?.code;
     console.error('Signup failed:', {
       code,
-      message: error instanceof Error ? error.message : String(error),
     });
     return res.status(code === '23505' ? 409 : 503).json({ error: code === '23505' ? 'email_already_registered' : 'database_unavailable' });
   }
 });
 
 // 3. GET CURRENT USER PROFILE
-authRoutes.get('/me', async (req, res) => {
+authRoutes.get('/me', requireAuth, async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
 
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'unauthorized' });
@@ -263,9 +280,9 @@ authRoutes.get('/me', async (req, res) => {
 });
 
 // 4. UPDATE USER PROFILE
-authRoutes.patch('/me', async (req, res) => {
+authRoutes.patch('/me', requireAuth, async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
 
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'unauthorized' });
@@ -304,51 +321,43 @@ authRoutes.patch('/me', async (req, res) => {
   }
 });
 
-// 5. PASSWORD RECOVERY / RESET
+// Reset tokens have a separate purpose, a short expiry, and single-use semantics.
+const recoveryEmail = z.object({ email: z.string().trim().toLowerCase().email().max(254) });
 authRoutes.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email_required' });
-
-  try {
-    const [user] = await db.select().from(users).where(eq(users.email, String(email).toLowerCase()));
-    if (!user) {
-      return res.json({ success: true, message: 'If an account exists, instructions have been sent.' });
-    }
-
-    const resetToken = signToken({ id: user.id, email: user.email, role: user.role as any });
-    return res.json({
-      success: true,
-      message: 'Password reset token generated.',
-      resetToken,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: (error as Error).message });
+  const parsed = recoveryEmail.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_email' });
+  if (!process.env.RESEND_API_KEY || !process.env.APP_URL || !process.env.EMAIL_FROM) {
+    return res.status(503).json({ error: 'password_recovery_unavailable', message: 'Please contact support to recover your account.' });
   }
+  const [user] = await db.select().from(users).where(eq(users.email, parsed.data.email));
+  if (user?.isActive) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await db.transaction(async (tx) => {
+      await tx.update(passwordResetTokens).set({ usedAt: new Date() }).where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+      await tx.insert(passwordResetTokens).values({ tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) });
+    });
+    // Never disclose whether an address exists or return the token to the caller.
+    const result = await sendPasswordResetEmail(user.email, token);
+    if (!result.success) console.warn('Password reset email delivery requires retry');
+  }
+  return res.json({ success: true, message: 'If an account exists, password reset instructions have been sent.' });
 });
 
 authRoutes.post('/reset-password', async (req, res) => {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: 'invalid_token_or_password_too_short' });
-  }
-
-  const payload = verifyToken(token);
-  if (!payload) {
-    return res.status(401).json({ error: 'invalid_or_expired_reset_token' });
-  }
-
-  try {
-    await db.update(users).set({
-      passwordHash: hashPassword(newPassword),
-      updatedAt: new Date(),
-    }).where(eq(users.id, payload.id));
-
-    return res.json({ success: true, message: 'Password has been reset successfully. Please log in with your new password.' });
-  } catch (error) {
-    return res.status(500).json({ error: (error as Error).message });
-  }
+  const parsed = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), newPassword: z.string().min(8).max(128) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_token_or_password' });
+  const tokenHash = crypto.createHash('sha256').update(parsed.data.token).digest('hex');
+  const result = await db.transaction(async (tx) => {
+    let [reset] = await tx.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash));
+    if (!reset || reset.usedAt || reset.expiresAt.getTime() <= Date.now()) return false;
+    const [account] = await tx.select().from(users).where(eq(users.id, reset.userId)).for('update');
+    if (!account?.isActive) return false;
+    [reset] = await tx.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash)).for('update');
+    if (!reset || reset.usedAt || reset.expiresAt.getTime() <= Date.now()) return false;
+    await tx.update(users).set({ passwordHash: hashPassword(parsed.data.newPassword), updatedAt: new Date() }).where(eq(users.id, reset.userId));
+    await tx.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.userId, reset.userId));
+    return true;
+  });
+  return result ? res.json({ success: true, message: 'Your password has been reset. Please sign in again.' }) : res.status(401).json({ error: 'invalid_or_expired_reset_token' });
 });
-
-
-
-

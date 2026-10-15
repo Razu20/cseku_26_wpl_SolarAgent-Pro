@@ -107,7 +107,7 @@ export function ChatbotWidget({ context }: { context?: ChatbotContextProps }) {
         ...prev,
         {
           sender: 'assistant',
-          text: 'I am temporarily unable to connect to the assistant service. Please check your backend connection on port 4000.',
+          text: 'I am temporarily unable to connect to the assistant service. Please try again in a moment.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);

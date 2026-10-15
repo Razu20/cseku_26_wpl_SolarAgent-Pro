@@ -17,6 +17,8 @@ export function LandingPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +66,7 @@ export function LandingPage() {
   // Fetch products, categories, companies
   useEffect(() => {
     setLoading(true);
+    setCatalogError('');
     Promise.all([
       api<{ products: any[] }>('/products'),
       api<{ categories: any[] }>('/categories'),
@@ -75,10 +78,10 @@ export function LandingPage() {
         setCompanies(compRes.companies || []);
       })
       .catch((err) => {
-        console.error('Failed to load marketplace catalog', err);
+        setCatalogError(err instanceof Error ? err.message : 'The catalog could not be loaded.');
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [catalogAttempt]);
 
   // Filtered and Sorted products
   const filteredProducts = useMemo(() => {
@@ -184,6 +187,7 @@ export function LandingPage() {
 
   return (
     <div className="marketplace-home-layout">
+      {catalogError && <div className="service-notice" role="alert"><div><strong>We couldn’t load the marketplace</strong><p>{catalogError}</p></div><button type="button" className="secondary-button" onClick={() => setCatalogAttempt((attempt) => attempt + 1)}>Try again</button></div>}
       {/* 1. TOP NAVBAR */}
       <header className="marketplace-navbar">
         <div className="navbar-container">

@@ -27,7 +27,7 @@ leadRoutes.post('/', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   try {
     const [lead] = await db.insert(leads).values(parsed.data).returning();
-    const audit = createAuditEvent('system', 'lead_created', 'lead', lead.id, { lead });
+    const audit = await createAuditEvent('system', 'lead_created', 'lead', lead.id, { lead });
     return res.status(201).json({ lead, audit });
   } catch { return res.status(503).json({ error: 'database_unavailable' }); }
 });

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from '../lib/router';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { orders, payments } from '../db/schema';
 import { initializeSslCommerzPayment, verifyServerSidePayment } from '../services/payment';
@@ -36,7 +36,7 @@ paymentRoutes.post('/sslcommerz/init', requireAuth, async (req: AuthenticatedReq
 
     const initResult = await initializeSslCommerzPayment({
       orderId: order.id,
-      userId: parsed.data.userId || order.userId || undefined,
+      userId: order.userId || undefined,
       totalAmount: Number(order.totalAmount),
       customerName: order.customerName,
       customerEmail: order.email || 'customer@solaragent.com.bd',
@@ -47,18 +47,20 @@ paymentRoutes.post('/sslcommerz/init', requireAuth, async (req: AuthenticatedReq
 
     return res.json(initResult);
   } catch (error) {
-    console.error('Payment initialization error:', error);
+    if (['payment_already_pending', 'order_already_paid', 'order_not_payable'].includes((error as Error).message)) return res.status(409).json({ error: (error as Error).message });
+    console.error('Payment initialization failed');
     return res.status(500).json({ error: (error as Error).message || 'payment_init_failed' });
   }
 });
 
 // 2. SSLCommerz Sandbox / Simulator Gateway Page (HTML)
 paymentRoutes.get('/sslcommerz/simulator', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.PAYMENT_SIMULATOR_ENABLED !== 'true') {
     return res.status(404).json({ error: 'route_not_found' });
   }
 
-  const { tran_id, amount, order_id, return_url } = req.query;
+  const { tran_id, amount, order_id, return_url } = Object.fromEntries(Object.entries(req.query).map(([key, value]) => [key, String(value).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)]));
+  res.headers?.set('Content-Type', 'text/html; charset=utf-8');
 
   const html = `
     <!DOCTYPE html>
@@ -135,10 +137,10 @@ paymentRoutes.get('/sslcommerz/simulator', (req, res) => {
 // 3. SSLCommerz Success Callback (Server-side validation)
 paymentRoutes.post('/sslcommerz/success', async (req, res) => {
   const tranId = req.body.tran_id || req.query.tran_id;
-  const valId = req.body.val_id || req.query.val_id || `SIM_${Date.now()}`;
+  const valId = req.body.val_id || req.query.val_id || '';
   const returnUrl = req.body.return_url || req.query.return_url;
 
-  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
   if (!tranId) {
     return res.status(400).send('Missing transaction id');
@@ -147,7 +149,7 @@ paymentRoutes.post('/sslcommerz/success', async (req, res) => {
   const verification = await verifyServerSidePayment(String(valId), String(tranId));
 
   if (verification.success) {
-    const redirectUrl = returnUrl ? decodeURIComponent(returnUrl) : `${frontendUrl}/customer?payment=success&orderId=${verification.orderId}&tran_id=${tranId}`;
+    const redirectUrl = `${frontendUrl}/customer?payment=success&orderId=${verification.orderId}&tran_id=${tranId}`;
     return res.redirect(redirectUrl);
   } else {
     return res.redirect(`${frontendUrl}/customer?payment=failed&error=${verification.error}`);
@@ -157,11 +159,9 @@ paymentRoutes.post('/sslcommerz/success', async (req, res) => {
 // 4. SSLCommerz Fail Callback
 paymentRoutes.post('/sslcommerz/fail', async (req, res) => {
   const tranId = req.body.tran_id || req.query.tran_id;
-  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
-  if (tranId) {
-    await db.update(payments).set({ status: 'failed' }).where(eq(payments.transactionId, String(tranId)));
-  }
+  // An unauthenticated browser redirect cannot change authoritative payment state.
 
   return res.redirect(`${frontendUrl}/customer?payment=failed&tran_id=${tranId}`);
 });
@@ -169,11 +169,9 @@ paymentRoutes.post('/sslcommerz/fail', async (req, res) => {
 // 5. SSLCommerz Cancel Callback
 paymentRoutes.post('/sslcommerz/cancel', async (req, res) => {
   const tranId = req.body.tran_id || req.query.tran_id;
-  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
-  if (tranId) {
-    await db.update(payments).set({ status: 'cancelled' }).where(eq(payments.transactionId, String(tranId)));
-  }
+  // Pending payments remain pending until the provider verifies their state.
 
   return res.redirect(`${frontendUrl}/customer?payment=cancelled&tran_id=${tranId}`);
 });
@@ -189,6 +187,8 @@ paymentRoutes.post('/cod/confirm', requireAuth, async (req: AuthenticatedRequest
     if (req.user!.role !== 'admin' && order.userId !== req.user!.id) {
       return res.status(403).json({ error: 'order_access_denied' });
     }
+
+    if (order.paymentStatus === 'verified' || !canTransitionOrderStatus(order.status, 'awaiting_payment')) return res.status(409).json({ error: 'order_not_payable' });
 
     // COD is set to payment_pending_verification, never auto-paid
     await db.update(orders).set({
@@ -217,3 +217,9 @@ paymentRoutes.post('/cod/confirm', requireAuth, async (req: AuthenticatedRequest
 
 
 
+
+paymentRoutes.post('/sslcommerz/ipn', async (req, res) => {
+  if (!req.body.tran_id || !req.body.val_id) return res.status(400).json({ error: 'payment_validation_required' });
+  const result = await verifyServerSidePayment(String(req.body.val_id), String(req.body.tran_id));
+  return res.status(result.success ? 200 : 400).json(result);
+});

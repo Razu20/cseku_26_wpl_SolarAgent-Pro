@@ -1,11 +1,34 @@
 import 'dotenv/config';
 import { pool } from './client';
+import { readFile } from 'node:fs/promises';
 
 async function migrate() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(72819421)");
+    const { rows: [state] } = await client.query("SELECT to_regclass('public.users') AS users");
+    if (!state.users) {
+      const initial = await readFile(new URL('../../drizzle/0000_flimsy_hulk.sql', import.meta.url), 'utf8');
+      await client.query(initial);
+    }
+
     await client.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        token_hash text PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at timestamp with time zone NOT NULL,
+        used_at timestamp with time zone
+      );
+      CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id);
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES product_catalog(id);
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS warehouse_id uuid;
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS supplier_id uuid REFERENCES companies(id);
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS reserved_quantity integer NOT NULL DEFAULT 0;
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS available_quantity integer NOT NULL DEFAULT 0;
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS damaged_quantity integer NOT NULL DEFAULT 0;
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS min_threshold integer NOT NULL DEFAULT 10;
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_cost numeric(12, 2) DEFAULT '0';
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS scheduled_slot text DEFAULT 'full_day';
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS installation_status text DEFAULT 'pending';
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason text;
@@ -82,6 +105,8 @@ async function migrate() {
         created_at timestamp with time zone DEFAULT now()
       );
     `);
+    // Initialize availability only when adding the missing legacy columns.
+    await client.query(`UPDATE inventory_items SET available_quantity = GREATEST(0, quantity - reserved_quantity - damaged_quantity) WHERE available_quantity <> GREATEST(0, quantity - reserved_quantity - damaged_quantity)`);
     await client.query('COMMIT');
     console.log('Database migration completed successfully.');
   } catch (error) {

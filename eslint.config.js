@@ -4,9 +4,10 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/coverage/**', 'node_modules/**'],
+    ignores: ['**/dist/**', '**/coverage/**', 'node_modules/**', '.next/**'],
   },
   js.configs.recommended,
+  { files: ['scripts/**/*.mjs'], languageOptions: { globals: { console: 'readonly', process: 'readonly' } } },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -15,6 +16,8 @@ export default [
       sourceType: 'module',
       globals: {
         console: 'readonly',
+        Response: 'readonly',
+        AbortSignal: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',

@@ -17,7 +17,7 @@ type Profile = {
 export function AuthPage({ mode }: { mode: Mode }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [role, setRole] = useState<'admin' | 'customer'>((params.get('role') as 'admin' | 'customer') || 'customer');
+  const [role, setRole] = useState<'admin' | 'customer' | 'technician' | 'supplier'>(['admin', 'technician', 'supplier'].includes(params.get('role') || '') ? params.get('role') as 'admin' | 'technician' | 'supplier' : 'customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -80,7 +80,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
       localStorage.setItem('solaragent.role', result.user.role);
       localStorage.setItem('solaragent.user', JSON.stringify(result.user));
 
-      router.push(result.user.role === 'admin' ? '/admin/dashboard' : '/customer');
+      router.push(result.user.role === 'admin' ? '/admin/dashboard' : result.user.role === 'technician' ? '/technician' : '/customer');
     } catch (reason) {
       const msg = (reason as Error).message;
       if (msg === 'invalid_credentials') {
@@ -126,6 +126,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
           <span className="auth-brand-mark">SA</span>
           <span>SolarAgent Pro</span>
         </Link>
+        {!isSignup && <Link href="/forgot-password">Forgot password?</Link>}
         <div className="auth-card-heading">
           <span className="eyebrow">{isSignup ? 'Join the energy workspace' : 'Secure workspace access'}</span>
           <h2>{isSignup ? 'Create customer account' : 'Sign in'}</h2>
@@ -140,6 +141,8 @@ export function AuthPage({ mode }: { mode: Mode }) {
             <button className={role === 'admin' ? 'selected' : ''} onClick={() => setRole('admin')} type="button">
               Administrator
             </button>
+            <button className={role === 'technician' ? 'selected' : ''} onClick={() => setRole('technician')} type="button">Technician</button>
+            <button className={role === 'supplier' ? 'selected' : ''} onClick={() => setRole('supplier')} type="button">Supplier</button>
           </div>
         )}
 

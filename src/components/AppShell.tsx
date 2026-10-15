@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { api } from '../lib/api';
 import { usePathname, useRouter } from 'next/navigation';
 
 const adminLinks = [
@@ -31,23 +32,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [role, setRole] = useState<'admin' | 'customer' | null>(null);
-  const links = role === 'admin' ? adminLinks : customerLinks;
+  const [role, setRole] = useState<'admin' | 'customer' | 'technician' | 'supplier' | null>(null);
+  const links = role === 'admin' ? adminLinks : role === 'technician' ? [['My installation jobs', '/technician'], ['Marketplace Shop', '/']] : customerLinks.filter(([, path]) => !['/recommendations', '/monitoring'].includes(path));
 
   useEffect(() => {
-    setRole(localStorage.getItem('solaragent.role') === 'admin' ? 'admin' : 'customer');
+    const stored = localStorage.getItem('solaragent.role');
+    setRole(['admin', 'technician', 'supplier'].includes(stored || '') ? stored as 'admin' | 'technician' | 'supplier' : 'customer');
     setMenuOpen(false);
   }, []);
 
   useEffect(() => {
     if (!role) return;
     if (role === 'admin' && pathname === '/customer') router.replace('/admin/dashboard');
-    if (role === 'customer' && pathname.startsWith('/admin')) router.replace('/customer');
+    if (role !== 'admin' && pathname.startsWith('/admin')) router.replace(role === 'technician' ? '/technician' : '/customer');
+    if (role === 'technician' && pathname === '/customer') router.replace('/technician');
   }, [pathname, router, role]);
 
   function signOut() {
     localStorage.removeItem('solaragent.token');
     localStorage.removeItem('solaragent.role');
+    localStorage.removeItem('solaragent.user');
     router.push('/login');
   }
 
@@ -63,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="sidebar-bottom"><button className="nav-link nav-button" onClick={signOut}>Sign out</button></div>
       </aside>
       <section className="app-content">
-        <header className="topbar"><button className="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>☰</button><div><span className="eyebrow">{role === 'admin' ? 'Admin control' : 'Customer portal'}</span><strong>{role === 'admin' ? 'Operations command center' : 'Your solar workspace'}</strong></div><div className="topbar-actions"><span className="status-dot">Connected</span><span className="avatar">{role === 'admin' ? 'AD' : 'CU'}</span></div></header>
+        <header className="topbar"><button className="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>☰</button><div><span className="eyebrow">{role === 'admin' ? 'Admin control' : 'Customer portal'}</span><strong>{role === 'admin' ? 'Operations command center' : 'Your solar workspace'}</strong></div><div className="topbar-actions"><span className="status-dot">Workspace</span><span className="avatar">{role === 'admin' ? 'AD' : 'CU'}</span></div></header>
         <div className="page-frame">{children}</div>
       </section>
     </div>
@@ -76,7 +80,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!localStorage.getItem('solaragent.token')) router.replace('/login');
-    else setReady(true);
+    else api('/auth/me').then(() => setReady(true)).catch(() => router.replace('/login'));
   }, [router]);
 
   return ready ? <>{children}</> : null;

@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, notFound } from 'next/navigation';
 import { LandingPage } from '../../src/screens/LandingPage';
 import { DashboardPage } from '../../src/screens/DashboardPage';
 import { LeadsPage } from '../../src/screens/LeadsPage';
@@ -14,6 +14,8 @@ import { AuditPage } from '../../src/screens/AuditPage';
 import { AdminPanelPage } from '../../src/screens/AdminPanelPage';
 import { CustomerPanelPage } from '../../src/screens/CustomerPanelPage';
 import { AdminDashboardPage } from '../../src/screens/AdminDashboardPage';
+import { RecoveryPage } from '../../src/screens/RecoveryPage';
+import { TechnicianPanelPage } from '../../src/screens/TechnicianPanelPage';
 import { AuthPage } from '../../src/screens/AuthPage';
 import { ProductDetailsPage } from '../../src/screens/ProductDetailsPage';
 import { AppShell, ProtectedRoute } from '../../src/components/AppShell';
@@ -43,6 +45,8 @@ export default function Page() {
 
   if (pathname === '/') return <LandingPage />;
   if (segments[0] === 'products' && segments[1]) return <ProductDetailsPage id={segments[1]} />;
+  if (pathname === '/forgot-password') return <RecoveryPage />;
+  if (pathname === '/reset-password') return <RecoveryPage reset />;
   if (pathname === '/login' || pathname === '/signup') {
     return <AuthPage mode={pathname === '/signup' ? 'signup' : 'login'} />;
   }
@@ -58,13 +62,14 @@ export default function Page() {
     case '/recommendations': content = <RecommendationPage />; break;
     case '/monitoring': content = <MonitoringPage />; break;
     case '/audit': content = <AuditPage />; break;
+    case '/technician': content = <TechnicianPanelPage />; break;
     case '/customer': content = <CustomerPanelPage />; break;
     case '/admin/dashboard': content = <AdminDashboardPage />; break;
     default:
       if (segments[0] === 'admin' && adminSections[segments[1] || 'admin']) {
         content = <AdminPanelPage section={adminSections[segments[1] || 'admin']} />;
       } else {
-        content = <LandingPage />;
+        notFound();
       }
   }
 

@@ -1,15 +1,17 @@
 // @ts-nocheck
 import { Router } from '../lib/router';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { supportTickets } from '../db/schema';
+import { requireAuth } from './auth';
+import { supportTickets, orders } from '../db/schema';
 import { processChatbotMessage } from '../services/chatbot';
 
 export const chatRoutes = new Router();
 
 const chatSchema = z.object({
   mode: z.enum(['org_support', 'technical_assistant']).default('technical_assistant'),
-  message: z.string().min(1),
+  message: z.string().min(1).max(4000),
   context: z.object({
     page: z.string().optional(),
     step: z.number().optional(),
@@ -51,14 +53,18 @@ const ticketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 });
 
-chatRoutes.post('/ticket', async (req, res) => {
+chatRoutes.post('/ticket', requireAuth, async (req, res) => {
   const parsed = ticketSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   try {
+    if (parsed.data.orderId) {
+      const [order] = await db.select().from(orders).where(eq(orders.id, parsed.data.orderId));
+      if (!order || (req.user!.role !== 'admin' && order.userId !== req.user!.id)) return res.status(403).json({ error: 'order_access_denied' });
+    }
     const ticketNumber = `TCK-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
     const [ticket] = await db.insert(supportTickets).values({
-      userId: parsed.data.userId,
+      userId: req.user!.id,
       orderId: parsed.data.orderId,
       ticketNumber,
       title: parsed.data.title,

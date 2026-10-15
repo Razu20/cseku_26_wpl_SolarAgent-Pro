@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { adminSettings, appliances, productCatalog } from '../db/schema';
 import { getDistrictData } from '../data/bangladeshLocations';
@@ -36,9 +36,14 @@ export interface CalculationInput {
   selectedTurbineId?: string;
 }
 
-export async function calculateRenewableProject(input: CalculationInput) {
+export interface CalculationData {
+  settings: (typeof adminSettings.$inferSelect)[];
+  appliances: (typeof appliances.$inferSelect)[];
+  catalog: (typeof productCatalog.$inferSelect)[];
+}
+export async function calculateRenewableProject(input: CalculationInput, data?: CalculationData) {
   // 1. Load Admin Settings (Pricing & Engineering)
-  const settingsRows = await db.select().from(adminSettings);
+  const settingsRows = data?.settings ?? await db.select().from(adminSettings);
   const pricingSettings = (settingsRows.find((s) => s.key === 'pricing_settings')?.data as any) || {
     baseInstallationRatePerKwp: 6000,
     deliveryBaseCost: 3500,
@@ -63,7 +68,7 @@ export async function calculateRenewableProject(input: CalculationInput) {
   const tariffBdt = systemSettings.defaultElectricityTariffBdtKwh ?? 8.50;
 
   // 3. Load Calculations
-  const activeAppliances = await db.select().from(appliances).where(eq(appliances.active, true));
+  const activeAppliances = data?.appliances ?? await db.select().from(appliances).where(eq(appliances.active, true));
   const applianceMap = new Map(activeAppliances.map((a) => [a.id, a]));
 
   const itemizedLoads = input.appliances.map((selection) => {
@@ -94,11 +99,11 @@ export async function calculateRenewableProject(input: CalculationInput) {
   const maxSimultaneousSurgeW = Math.max(...itemizedLoads.map((i) => i.totalSurgeW), totalConnectedLoadW * 1.3);
 
   // 4. Products Catalog Lookup
-  const catalog = await db.select().from(productCatalog).where(eq(productCatalog.status, 'approved')).orderBy(asc(productCatalog.name));
+  const catalog = data?.catalog ?? await db.select().from(productCatalog).where(or(eq(productCatalog.status, 'approved'), eq(productCatalog.status, 'preferred'))).orderBy(asc(productCatalog.name));
   const isMatch = (cat: string | null | undefined, target: string) => {
     const c = (cat || '').toLowerCase();
     const t = target.toLowerCase();
-    return c === t || c.includes(t) || t.includes(c);
+    return Boolean(c) && (c === t || c.includes(t) || t.includes(c));
   };
   const allModules = catalog.filter((p) => isMatch(p.category, 'module') || isMatch(p.category, 'panel') || isMatch(p.category, 'solar'));
   const allInverters = catalog.filter((p) => isMatch(p.category, 'inverter'));
@@ -159,7 +164,7 @@ export async function calculateRenewableProject(input: CalculationInput) {
     selectedInverter = allInverters.find((i) => i.id === input.selectedInverterId) || allInverters[0];
   } else {
     if (input.configuration.system === 'hybrid-grid' || input.type === 'hybrid') {
-      selectedInverter = allInverters.find((i) => i.sku.includes('DEYE') || i.name.toLowerCase().includes('hybrid')) || allInverters[0];
+      selectedInverter = allInverters.find((i) => (i.sku || '').includes('DEYE') || i.name.toLowerCase().includes('hybrid')) || allInverters[0];
     } else if (input.configuration.system === 'off-grid') {
       selectedInverter = allInverters.find((i) => i.name.toLowerCase().includes('off-grid')) || allInverters[0];
     } else {

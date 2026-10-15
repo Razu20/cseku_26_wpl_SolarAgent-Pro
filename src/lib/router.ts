@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export type Request = {
   method: string;
+  pathname?: string;
   body: any;
   params: Record<string, string>;
   query: Record<string, any>;
@@ -42,10 +43,20 @@ export class Router {
       if (!match || (layer.method && layer.method!==req.method)) continue;
       const keys=pattern(full, !!layer.router || !layer.method).keys;
       const params={...req.params}; keys.forEach((k,i)=>{req.params[k]=decodeURIComponent(match[i+1]);});
-      if (layer.router) { if (await layer.router.dispatch(req,res,pathname,full)) return true; Object.assign(req.params,params); continue; }
-      let index=0; let ended=false;
-      const next:NextFunction=async (error?)=>{ if(error) throw error; const h=layer.handlers[index++]; if(h) await h(req,res,next); else ended=true; };
-      try { await next(); } catch(error) { console.error(error); if(!ended) res.status(500).json({error:'internal_server_error'}); }
+      if (layer.router) { if (await layer.router.dispatch(req,res,pathname,full)) return true; req.params=params; continue; }
+      // Track the continuation even when legacy middleware does not return next().
+      const run = async (index: number): Promise<void> => {
+        const handler = layer.handlers[index];
+        if (!handler || (res as any).response !== undefined) return;
+        let continuation: Promise<void> | undefined;
+        const next: NextFunction = (error?) => {
+          continuation = error ? Promise.reject(error) : run(index + 1);
+          return continuation;
+        };
+        await handler(req, res, next);
+        await continuation;
+      };
+      await run(0);
       // Middleware can call `next()` without writing a response. A default
       // status code alone must not prevent the next matching route layer.
       if ((res as any).response !== undefined) return true;
@@ -58,6 +69,7 @@ export function createRequest(request:NextRequest, body:any):Request {
   const headers:Record<string,string>={}; request.headers.forEach((v,k)=>{headers[k]=v;});
   return {
     method: request.method,
+    pathname: request.nextUrl.pathname.replace(/^\/api\/v1/, '') || '/',
     body,
     params: {},
     query,
@@ -65,9 +77,9 @@ export function createRequest(request:NextRequest, body:any):Request {
   };
 }
 export function createResponse():Response & {response?:NextResponse; statusCode?:number} {
-  const state:any={statusCode:200, headers:new Headers()}; 
-  const out:any={status(code:number){state.statusCode=code; return out;},json(data:any){state.response=NextResponse.json(data,{status:state.statusCode,headers:state.headers}); return out;},send(data:any=''){state.response=new NextResponse(typeof data==='string'?data:JSON.stringify(data),{status:state.statusCode,headers:state.headers}); return out;}}; out.redirect=(url:string)=>{state.response=NextResponse.redirect(url,state.statusCode); return out;};
-  Object.defineProperties(out,{response:{get:()=>state.response},statusCode:{get:()=>state.statusCode}}); return out;
+  const state:any={statusCode:200, headers:new Headers({'Cache-Control':'no-store'})};
+  const out:any={status(code:number){state.statusCode=code; return out;},json(data:any){if(state.statusCode >= 500) data = {error: state.statusCode === 503 ? 'service_unavailable' : 'internal_server_error', message: 'The service is temporarily unavailable. Please try again.'}; state.response=NextResponse.json(data,{status:state.statusCode,headers:state.headers}); return out;},send(data:any=''){state.response=new NextResponse(typeof data==='string'?data:JSON.stringify(data),{status:state.statusCode,headers:state.headers}); return out;}}; out.redirect=(url:string)=>{state.response=NextResponse.redirect(url,state.statusCode >= 300 && state.statusCode < 400 ? state.statusCode : 303); return out;};
+  Object.defineProperties(out,{headers:{get:()=>state.headers},response:{get:()=>state.response},statusCode:{get:()=>state.statusCode}}); return out;
 }
 
 
